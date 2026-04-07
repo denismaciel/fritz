@@ -160,6 +160,18 @@ func Parse(args []string) (Command, error) {
 	}
 }
 
+func ParseTelegramProcess(args []string) (Telegram, error) {
+	_, cfg, remaining, err := parseOptions(args)
+	if err != nil {
+		return Telegram{}, err
+	}
+	pollOnce, err := parseTelegramArgs(remaining)
+	if err != nil {
+		return Telegram{}, err
+	}
+	return Telegram{PollOnce: pollOnce, Config: cfg}, nil
+}
+
 func parseAuthArgs(cfg ConfigOptions, args []string) (Command, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf(`missing auth subcommand; use "%s auth login <provider>", "%s auth logout <provider>", or "%s auth status [provider]"`, brand.CLIName, brand.CLIName, brand.CLIName)

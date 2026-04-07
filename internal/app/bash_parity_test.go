@@ -20,7 +20,7 @@ func TestBashContextParity(t *testing.T) {
 		registry.Register(tool.NewBashTool(t.TempDir()))
 		var output bytes.Buffer
 		var generateCalls int
-		err := run(context.Background(), []string{"run", "echo hi"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Gateway {
+		err := run(context.Background(), []string{"run", "echo hi"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Client {
 			return fakeGateway{
 				streamDisabled: true,
 				generateCalls:  &generateCalls,
@@ -48,7 +48,7 @@ func TestBashContextParity(t *testing.T) {
 		registry.Register(tool.NewBashTool(t.TempDir()))
 		var sawToolResult bool
 		var generateCalls int
-		err := run(context.Background(), []string{"run", "echo hi"}, strings.NewReader(""), io.Discard, func(_ config.Runtime) model.Gateway {
+		err := run(context.Background(), []string{"run", "echo hi"}, strings.NewReader(""), io.Discard, func(_ config.Runtime) model.Client {
 			return fakeGateway{
 				streamDisabled: true,
 				generateCalls:  &generateCalls,
@@ -86,7 +86,7 @@ func TestBashContextParity(t *testing.T) {
 		registry.Register(tool.NewBashTool(t.TempDir()))
 		var sawOutput bool
 		var generateCalls int
-		err := run(context.Background(), []string{"run", "echo hi"}, strings.NewReader(""), io.Discard, func(_ config.Runtime) model.Gateway {
+		err := run(context.Background(), []string{"run", "echo hi"}, strings.NewReader(""), io.Discard, func(_ config.Runtime) model.Client {
 			return fakeGateway{
 				streamDisabled: true,
 				generateCalls:  &generateCalls,

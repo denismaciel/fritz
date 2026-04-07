@@ -1,11 +1,17 @@
-{ buildGoModule, lib }:
+{
+  buildGoModule,
+  lib,
+  pname ? "fritz",
+  subPackage ? "cmd/fritz",
+  mainProgram ? pname,
+}:
 buildGoModule {
-  pname = "fritz";
+  inherit pname;
   version = "0.1.0";
 
   src = ./.;
 
-  subPackages = [ "cmd/fritz" ];
+  subPackages = [ subPackage ];
 
   vendorHash = "sha256-EKRLp/yDYIvwQF1RvlTxhylnTzdnHoMvticQx8ONhlQ=";
 
@@ -16,7 +22,7 @@ buildGoModule {
 
   meta = with lib; {
     description = "Fritz CLI coding agent";
-    mainProgram = "fritz";
+    inherit mainProgram;
     platforms = platforms.unix;
   };
 }

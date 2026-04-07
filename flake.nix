@@ -21,9 +21,14 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           fritz = pkgs.callPackage ./package.nix { };
+          fritz-telegram = pkgs.callPackage ./package.nix {
+            pname = "fritz-telegram";
+            subPackage = "cmd/fritz-telegram";
+            mainProgram = "fritz-telegram";
+          };
         in
         {
-          inherit fritz;
+          inherit fritz fritz-telegram;
           default = fritz;
         }
       );
@@ -32,6 +37,10 @@
         fritz = {
           type = "app";
           program = "${self.packages.${system}.fritz}/bin/fritz";
+        };
+        fritz-telegram = {
+          type = "app";
+          program = "${self.packages.${system}.fritz-telegram}/bin/fritz-telegram";
         };
         default = self.apps.${system}.fritz;
       });

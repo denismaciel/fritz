@@ -12,7 +12,7 @@ import (
 
 func TestLocalServiceStartAndSubmit(t *testing.T) {
 	dir := t.TempDir()
-	service := NewLocalService(dir, testConfig(dir), func(_ config.Runtime) model.Gateway {
+	service := NewLocalService(dir, testConfig(dir), func(_ config.Runtime) model.Client {
 		return &testGateway{
 			streamFunc: func(_ context.Context, _ model.Request, emit func(model.StreamEvent) error) (model.Response, error) {
 				_ = emit(model.StreamEvent{TextDelta: "he"})
@@ -49,7 +49,7 @@ func TestLocalServiceStartAndSubmit(t *testing.T) {
 
 func TestLocalServiceCancelStopsRun(t *testing.T) {
 	dir := t.TempDir()
-	service := NewLocalService(dir, testConfig(dir), func(_ config.Runtime) model.Gateway {
+	service := NewLocalService(dir, testConfig(dir), func(_ config.Runtime) model.Client {
 		return &testGateway{
 			streamFunc: func(ctx context.Context, _ model.Request, _ func(model.StreamEvent) error) (model.Response, error) {
 				<-ctx.Done()

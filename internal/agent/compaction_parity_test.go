@@ -19,7 +19,7 @@ func TestCompactionParity(t *testing.T) {
 		dir := t.TempDir()
 		cfg := compactingTestConfig(t, dir)
 		var requests []model.Request
-		service := NewService(dir, cfg, func(_ config.Runtime) model.Gateway {
+		service := NewService(dir, cfg, func(_ config.Runtime) model.Client {
 			return &testGateway{
 				generateFunc: func(req model.Request, call int) (model.Response, error) {
 					requests = append(requests, req)
@@ -66,7 +66,7 @@ func TestCompactionParity(t *testing.T) {
 			t.Fatalf("WriteFile() error = %v", err)
 		}
 		var requests []model.Request
-		service := NewService(dir, cfg, func(_ config.Runtime) model.Gateway {
+		service := NewService(dir, cfg, func(_ config.Runtime) model.Client {
 			return &testGateway{
 				generateFunc: func(req model.Request, call int) (model.Response, error) {
 					requests = append(requests, req)
@@ -124,7 +124,7 @@ func TestCompactionParity(t *testing.T) {
 		dir := t.TempDir()
 		cfg := compactingTestConfig(t, dir)
 		var requests []model.Request
-		service := NewService(dir, cfg, func(_ config.Runtime) model.Gateway {
+		service := NewService(dir, cfg, func(_ config.Runtime) model.Client {
 			return &testGateway{
 				generateFunc: func(req model.Request, call int) (model.Response, error) {
 					requests = append(requests, req)
@@ -170,7 +170,7 @@ func TestCompactionParity(t *testing.T) {
 		seedPersistedRuntimeManager(t, dir)
 
 		var requests []model.Request
-		service := NewService(dir, cfg, func(_ config.Runtime) model.Gateway {
+		service := NewService(dir, cfg, func(_ config.Runtime) model.Client {
 			return &testGateway{
 				generateFunc: func(req model.Request, call int) (model.Response, error) {
 					requests = append(requests, req)

@@ -77,13 +77,13 @@ type RuntimeOptions struct {
 	Session session.StartOptions
 }
 
-type GatewayFactory func(cfg config.Runtime) model.Gateway
+type ClientFactory func(cfg config.Runtime) model.Client
 type RegistryFactory func(cfg config.Runtime) *tool.Registry
 
 type Service struct {
 	cwd         string
 	cfg         config.Runtime
-	newGateway  GatewayFactory
+	newClient   ClientFactory
 	newRegistry RegistryFactory
 	profile     prompt.Profile
 
@@ -93,11 +93,11 @@ type Service struct {
 	runs map[string]context.CancelFunc
 }
 
-func NewService(cwd string, cfg config.Runtime, newGateway GatewayFactory, newRegistry RegistryFactory) *Service {
-	return NewServiceWithPromptProfile(cwd, cfg, newGateway, newRegistry, prompt.ProfileCoding)
+func NewService(cwd string, cfg config.Runtime, newClient ClientFactory, newRegistry RegistryFactory) *Service {
+	return NewServiceWithPromptProfile(cwd, cfg, newClient, newRegistry, prompt.ProfileCoding)
 }
 
-func NewServiceWithPromptProfile(cwd string, cfg config.Runtime, newGateway GatewayFactory, newRegistry RegistryFactory, profile prompt.Profile) *Service {
+func NewServiceWithPromptProfile(cwd string, cfg config.Runtime, newClient ClientFactory, newRegistry RegistryFactory, profile prompt.Profile) *Service {
 	if newRegistry == nil {
 		newRegistry = func(config.Runtime) *tool.Registry {
 			return tool.NewRegistry()
@@ -106,7 +106,7 @@ func NewServiceWithPromptProfile(cwd string, cfg config.Runtime, newGateway Gate
 	return &Service{
 		cwd:         cwd,
 		cfg:         cfg,
-		newGateway:  newGateway,
+		newClient:   newClient,
 		newRegistry: newRegistry,
 		profile:     profile,
 		runs:        map[string]context.CancelFunc{},
@@ -118,7 +118,7 @@ type Runtime struct {
 	cwd           string
 	cfg           config.Runtime
 	promptRuntime prompt.Runtime
-	gateway       model.Gateway
+	gateway       model.Client
 	registry      *tool.Registry
 	manager       *session.Manager
 
@@ -179,7 +179,7 @@ func (r *Runtime) Submit(ctx context.Context, req RunRequest) (RunHandle, error)
 		return RunHandle{}, err
 	}
 	if r.gateway == nil {
-		r.gateway = r.service.newGateway(r.cfg)
+		r.gateway = r.service.newClient(r.cfg)
 	}
 	if r.manager != nil {
 		if _, err := r.manager.AppendPrompt(expanded); err != nil {

@@ -62,7 +62,7 @@ type Service interface {
 	Cancel(runID string) bool
 }
 
-type GatewayFactory = agent.GatewayFactory
+type ClientFactory = agent.ClientFactory
 type RegistryFactory = agent.RegistryFactory
 
 type LocalService struct {
@@ -72,11 +72,11 @@ type LocalService struct {
 func NewLocalService(
 	cwd string,
 	cfg config.Runtime,
-	newGateway GatewayFactory,
+	newClient ClientFactory,
 	newRegistry RegistryFactory,
 ) *LocalService {
 	return &LocalService{
-		base: agent.NewService(cwd, cfg, newGateway, newRegistry),
+		base: agent.NewService(cwd, cfg, newClient, newRegistry),
 	}
 }
 
@@ -141,6 +141,6 @@ func NewRegistryFactory(registry *tool.Registry) RegistryFactory {
 	}
 }
 
-func NewGatewayFactory(factory func(config.Runtime) model.Gateway) GatewayFactory {
-	return agent.GatewayFactory(factory)
+func NewClientFactory(factory func(config.Runtime) model.Client) ClientFactory {
+	return agent.ClientFactory(factory)
 }

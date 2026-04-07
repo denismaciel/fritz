@@ -3,7 +3,7 @@ package heartbeat
 import (
 	"path/filepath"
 
-	"fritz/internal/gateway"
+	"fritz/internal/ingress"
 )
 
 type JSONStore struct {
@@ -18,12 +18,12 @@ func NewJSONStoreAt(path string) *JSONStore {
 	return &JSONStore{path: path}
 }
 
-func NewJSONStoreForPaths(paths gateway.StatePaths) *JSONStore {
+func NewJSONStoreForPaths(paths ingress.StatePaths) *JSONStore {
 	return &JSONStore{path: paths.HeartbeatStatePath}
 }
 
 func (s *JSONStore) Load() (State, error) {
-	state, _, err := gateway.ReadJSONFile(s.path, State{})
+	state, _, err := ingress.ReadJSONFile(s.path, State{})
 	if err != nil {
 		return State{}, err
 	}
@@ -43,5 +43,5 @@ func (s *JSONStore) Save(state State) error {
 	if state.Pending == nil {
 		state.Pending = []Wake{}
 	}
-	return gateway.WriteJSONFileAtomic(s.path, state)
+	return ingress.WriteJSONFileAtomic(s.path, state)
 }

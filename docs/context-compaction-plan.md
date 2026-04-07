@@ -32,10 +32,10 @@ Key parts:
 
 Current local behavior is much simpler:
 
-- Turn-count trigger only: [`planning.go`](/home/denis/dotfiles/fritz/internal/session/planning.go)
-- Summary entry persisted, but no replacement-history checkpoint: [`compaction.go`](/home/denis/dotfiles/fritz/internal/session/compaction.go)
-- Context rebuild = single `"Compaction summary"` user msg + kept raw messages: [`manager.go`](/home/denis/dotfiles/fritz/internal/session/manager.go)
-- Retry only after provider returns `"context overflow"`: [`service.go`](/home/denis/dotfiles/fritz/internal/agent/service.go)
+- Turn-count trigger only: [`planning.go`](/home/denis/github.com/denismaciel/fritz/internal/session/planning.go)
+- Summary entry persisted, but no replacement-history checkpoint: [`compaction.go`](/home/denis/github.com/denismaciel/fritz/internal/session/compaction.go)
+- Context rebuild = single `"Compaction summary"` user msg + kept raw messages: [`manager.go`](/home/denis/github.com/denismaciel/fritz/internal/session/manager.go)
+- Retry only after provider returns `"context overflow"`: [`service.go`](/home/denis/github.com/denismaciel/fritz/internal/agent/service.go)
 
 Net: ours is easy, but lossy and reactive.
 
@@ -117,10 +117,10 @@ Changes:
 
 Touch:
 
-- [`model.go`](/home/denis/dotfiles/fritz/internal/model/model.go)
-- [`config.go`](/home/denis/dotfiles/fritz/internal/config/config.go)
-- [`service.go`](/home/denis/dotfiles/fritz/internal/agent/service.go)
-- [`compaction.go`](/home/denis/dotfiles/fritz/internal/session/compaction.go)
+- [`model.go`](/home/denis/github.com/denismaciel/fritz/internal/model/model.go)
+- [`config.go`](/home/denis/github.com/denismaciel/fritz/internal/config/config.go)
+- [`service.go`](/home/denis/github.com/denismaciel/fritz/internal/agent/service.go)
+- [`compaction.go`](/home/denis/github.com/denismaciel/fritz/internal/session/compaction.go)
 
 Why first: biggest win, least structural churn.
 
@@ -137,8 +137,8 @@ Changes:
 
 Touch:
 
-- [`manager.go`](/home/denis/dotfiles/fritz/internal/session/manager.go)
-- [`compaction.go`](/home/denis/dotfiles/fritz/internal/session/compaction.go)
+- [`manager.go`](/home/denis/github.com/denismaciel/fritz/internal/session/manager.go)
+- [`compaction.go`](/home/denis/github.com/denismaciel/fritz/internal/session/compaction.go)
 - session tests
 
 This is the main Codex idea worth adopting.
@@ -155,8 +155,8 @@ Changes:
 
 Touch:
 
-- [`service.go`](/home/denis/dotfiles/fritz/internal/agent/service.go)
-- [`chat/core.go`](/home/denis/dotfiles/fritz/internal/chat/core.go)
+- [`service.go`](/home/denis/github.com/denismaciel/fritz/internal/agent/service.go)
+- [`chat/core.go`](/home/denis/github.com/denismaciel/fritz/internal/chat/core.go)
 - session tests around tool loops
 
 ### Phase 4: compaction-quality improvements

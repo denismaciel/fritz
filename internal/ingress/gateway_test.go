@@ -1,4 +1,4 @@
-package gateway
+package ingress
 
 import (
 	"context"
@@ -163,7 +163,7 @@ func testService(dir string) engine.Service {
 	return engine.NewLocalService(
 		dir,
 		testConfig(dir),
-		engine.NewGatewayFactory(func(config.Runtime) model.Gateway {
+		engine.NewClientFactory(func(config.Runtime) model.Client {
 			return testGateway{}
 		}),
 		nil,

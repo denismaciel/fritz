@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"fritz/internal/config"
-	"fritz/internal/gateway"
+	"fritz/internal/ingress"
 	"fritz/internal/reminder"
 )
 
 func TestSourceTurnsDueReminderIntoTelegramWake(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 4, 3, 18, 0, 0, 0, time.UTC)
-	paths := gateway.ResolveStatePaths(dir, config.Resolve(config.Sources{
+	paths := ingress.ResolveStatePaths(dir, config.Resolve(config.Sources{
 		Defaults: config.DefaultSource(),
 	}))
 	store := reminder.NewStoreAtPath(paths.ReminderPath)
@@ -25,13 +25,13 @@ func TestSourceTurnsDueReminderIntoTelegramWake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Set() error = %v", err)
 	}
-	state := gateway.SessionMapFile{
-		Version: gateway.CurrentStoreVersion,
+	state := ingress.SessionMapFile{
+		Version: ingress.CurrentStoreVersion,
 		Sessions: map[string]string{
 			"telegram:dm:7": "/tmp/s1.jsonl",
 		},
 	}
-	if err := gateway.WriteJSONFileAtomic(paths.RoutingSessionMapPath, state); err != nil {
+	if err := ingress.WriteJSONFileAtomic(paths.RoutingSessionMapPath, state); err != nil {
 		t.Fatalf("WriteJSONFileAtomic() error = %v", err)
 	}
 

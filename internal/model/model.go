@@ -77,7 +77,7 @@ type StreamEvent struct {
 	ReasoningDelta string
 }
 
-type Gateway interface {
+type Client interface {
 	Generate(ctx context.Context, req Request) (Response, error)
 	StreamGenerate(ctx context.Context, req Request, emit func(StreamEvent) error) (Response, error)
 }

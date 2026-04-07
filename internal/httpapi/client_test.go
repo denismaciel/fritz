@@ -16,7 +16,7 @@ import (
 
 func TestRenderAGUIRun(t *testing.T) {
 	dir := t.TempDir()
-	service := agent.NewService(dir, testConfig(), func(_ config.Runtime) model.Gateway {
+	service := agent.NewService(dir, testConfig(), func(_ config.Runtime) model.Client {
 		return &testGateway{
 			streamFunc: func(_ context.Context, _ model.Request, emit func(model.StreamEvent) error) (model.Response, error) {
 				_ = emit(model.StreamEvent{TextDelta: "he"})

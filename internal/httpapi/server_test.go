@@ -22,7 +22,7 @@ import (
 
 func TestRunsEndpointStreamsAGUI(t *testing.T) {
 	dir := t.TempDir()
-	service := agent.NewService(dir, testConfig(), func(_ config.Runtime) model.Gateway {
+	service := agent.NewService(dir, testConfig(), func(_ config.Runtime) model.Client {
 		return &testGateway{
 			streamFunc: func(_ context.Context, _ model.Request, emit func(model.StreamEvent) error) (model.Response, error) {
 				_ = emit(model.StreamEvent{TextDelta: "he"})
@@ -72,7 +72,7 @@ func TestRunsEndpointStreamsAGUI(t *testing.T) {
 
 func TestCancelEndpointStopsRun(t *testing.T) {
 	dir := t.TempDir()
-	service := agent.NewService(dir, testConfig(), func(_ config.Runtime) model.Gateway {
+	service := agent.NewService(dir, testConfig(), func(_ config.Runtime) model.Client {
 		return &testGateway{
 			streamFunc: func(ctx context.Context, _ model.Request, _ func(model.StreamEvent) error) (model.Response, error) {
 				<-ctx.Done()
@@ -115,7 +115,7 @@ func TestRunsEndpointStreamsToolFlow(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("hello from file"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	service := agent.NewService(dir, testConfig(), func(_ config.Runtime) model.Gateway {
+	service := agent.NewService(dir, testConfig(), func(_ config.Runtime) model.Client {
 		return &toolGateway{}
 	}, func(config.Runtime) *tool.Registry {
 		registry := tool.NewRegistry()
@@ -150,7 +150,7 @@ func TestRunsEndpointStreamsToolFlow(t *testing.T) {
 
 func TestRunsEndpointStreamsError(t *testing.T) {
 	dir := t.TempDir()
-	service := agent.NewService(dir, testConfig(), func(_ config.Runtime) model.Gateway {
+	service := agent.NewService(dir, testConfig(), func(_ config.Runtime) model.Client {
 		return &testGateway{
 			streamFunc: func(_ context.Context, _ model.Request, _ func(model.StreamEvent) error) (model.Response, error) {
 				return model.Response{}, errors.New("boom")
@@ -188,7 +188,7 @@ func TestRunsEndpointStreamsError(t *testing.T) {
 
 func TestAISDKEndpointStreamsDataProtocol(t *testing.T) {
 	dir := t.TempDir()
-	service := agent.NewService(dir, testConfig(), func(_ config.Runtime) model.Gateway {
+	service := agent.NewService(dir, testConfig(), func(_ config.Runtime) model.Client {
 		return &testGateway{
 			streamFunc: func(_ context.Context, _ model.Request, emit func(model.StreamEvent) error) (model.Response, error) {
 				_ = emit(model.StreamEvent{TextDelta: "ok"})

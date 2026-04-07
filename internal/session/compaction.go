@@ -54,14 +54,14 @@ func PrepareCompaction(manager *Manager, keepTurns int) (CompactionPreparation, 
 	}, true
 }
 
-func Compact(ctx context.Context, manager *Manager, gateway model.Gateway, modelID string, keepTurns int, customInstructions string) (CompactionPreparation, string, error) {
+func Compact(ctx context.Context, manager *Manager, gateway model.Client, modelID string, keepTurns int, customInstructions string) (CompactionPreparation, string, error) {
 	return compactWithOptions(ctx, manager, gateway, modelID, compactOptions{
 		keepTurns:          keepTurns,
 		customInstructions: customInstructions,
 	})
 }
 
-func compactWithOptions(ctx context.Context, manager *Manager, gateway model.Gateway, modelID string, opts compactOptions) (CompactionPreparation, string, error) {
+func compactWithOptions(ctx context.Context, manager *Manager, gateway model.Client, modelID string, opts compactOptions) (CompactionPreparation, string, error) {
 	preparation, ok := PrepareCompaction(manager, opts.keepTurns)
 	if !ok {
 		return CompactionPreparation{}, "", errors.New("nothing to compact")
@@ -77,7 +77,7 @@ func compactWithOptions(ctx context.Context, manager *Manager, gateway model.Gat
 	return preparation, summary, nil
 }
 
-func MaybeAutoCompact(ctx context.Context, manager *Manager, cfg config.SessionConfig, gateway model.Gateway, modelID string) (bool, error) {
+func MaybeAutoCompact(ctx context.Context, manager *Manager, cfg config.SessionConfig, gateway model.Client, modelID string) (bool, error) {
 	context := manager.BuildContext()
 	plan := PlanCompaction(cfg, context.Transcript, model.EstimateMessagesTokens(context.Messages))
 	if !plan.ShouldCompact {
@@ -102,7 +102,7 @@ func MaybeCompactRequest(
 	ctx context.Context,
 	manager *Manager,
 	cfg config.SessionConfig,
-	gateway model.Gateway,
+	gateway model.Client,
 	req model.Request,
 ) (model.Request, bool, error) {
 	plan := PlanCompaction(cfg, manager.BuildContext().Transcript, model.EstimateRequestTokens(req))
@@ -138,7 +138,7 @@ func RetryAfterOverflow(
 	ctx context.Context,
 	manager *Manager,
 	cfg config.SessionConfig,
-	gateway model.Gateway,
+	gateway model.Client,
 	req model.Request,
 	retry func(model.Request) (model.Response, error),
 ) (model.Response, bool, error) {
@@ -172,7 +172,7 @@ func GenerateBranchSummary(
 	manager *Manager,
 	oldLeafID string,
 	targetID string,
-	gateway model.Gateway,
+	gateway model.Client,
 	modelID string,
 ) (string, error) {
 	abandoned := collectAbandonedLines(manager, oldLeafID, targetID)
@@ -201,7 +201,7 @@ func GenerateBranchSummary(
 	return summarizeTurns(ctx, gateway, modelID, transcript, "Summarize the abandoned branch and preserve anything needed to continue elsewhere.")
 }
 
-func summarizeTurns(ctx context.Context, gateway model.Gateway, modelID string, turns chat.Transcript, customInstructions string) (string, error) {
+func summarizeTurns(ctx context.Context, gateway model.Client, modelID string, turns chat.Transcript, customInstructions string) (string, error) {
 	promptText := prompt.BuildCompactionPrompt(turns, customInstructions)
 	response, err := gateway.Generate(ctx, model.Request{
 		ModelID:  modelID,

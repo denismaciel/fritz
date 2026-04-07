@@ -20,6 +20,7 @@ import (
 	"fritz/internal/heartbeat"
 	"fritz/internal/model"
 	"fritz/internal/openaicodex"
+	"fritz/internal/prompt"
 	"fritz/internal/provider"
 	"fritz/internal/tool"
 )
@@ -137,7 +138,7 @@ func TestRunDoctorUsesConfigFileAndFlags(t *testing.T) {
 	defer func() { _ = os.Chdir(origWD) }()
 
 	var output bytes.Buffer
-	err = run(context.Background(), []string{"--model", "flag-model", "doctor"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Gateway {
+	err = run(context.Background(), []string{"--model", "flag-model", "doctor"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Client {
 		t.Fatal("unexpected gateway creation")
 		return nil
 	}, tool.NewRegistry())
@@ -156,7 +157,7 @@ func TestRunDoctorUsesProviderFlag(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "env-key")
 
 	var output bytes.Buffer
-	err := run(context.Background(), []string{"--provider", "openai-codex", "doctor"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Gateway {
+	err := run(context.Background(), []string{"--provider", "openai-codex", "doctor"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Client {
 		t.Fatal("unexpected gateway creation")
 		return nil
 	}, tool.NewRegistry())
@@ -190,7 +191,7 @@ func TestRunAuthStatusWithStoredOAuth(t *testing.T) {
 	}
 
 	var output bytes.Buffer
-	err = run(context.Background(), []string{"auth", "status", "openai-codex"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Gateway {
+	err = run(context.Background(), []string{"auth", "status", "openai-codex"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Client {
 		t.Fatal("unexpected gateway creation")
 		return nil
 	}, tool.NewRegistry())
@@ -224,7 +225,7 @@ func TestRunAuthLogout(t *testing.T) {
 	}
 
 	var output bytes.Buffer
-	err = run(context.Background(), []string{"auth", "logout", "openai-codex"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Gateway {
+	err = run(context.Background(), []string{"auth", "logout", "openai-codex"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Client {
 		t.Fatal("unexpected gateway creation")
 		return nil
 	}, tool.NewRegistry())
@@ -286,7 +287,7 @@ func TestRunAuthLoginOpenAICodexManual(t *testing.T) {
 		[]string{"--provider", "openai-codex", "auth", "login", "openai-codex"},
 		strings.NewReader("http://localhost:1455/auth/callback?code=code-123&state=state-123\n"),
 		&output,
-		func(_ config.Runtime) model.Gateway {
+		func(_ config.Runtime) model.Client {
 			t.Fatal("unexpected gateway creation")
 			return nil
 		},
@@ -334,7 +335,7 @@ func TestDefaultGatewayFactoryOpenAICodex(t *testing.T) {
 			ModelID:             "gpt-5.4",
 		},
 	})
-	gateway := defaultGatewayFactory(dir, cfg)
+	gateway := defaultClientFactory(dir, cfg)
 	resp, err := gateway.Generate(context.Background(), model.Request{
 		SystemPrompt: "sys",
 		Messages:     []model.Message{model.TextMessage(model.UserRole, "hi")},
@@ -353,7 +354,7 @@ func TestRunAgentWithPrompt(t *testing.T) {
 	var output bytes.Buffer
 	var streamCalls int
 
-	err := run(context.Background(), []string{"run", "hi there"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Gateway {
+	err := run(context.Background(), []string{"run", "hi there"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Client {
 		return fakeGateway{
 			response:    "hello back",
 			streamCalls: &streamCalls,
@@ -380,7 +381,7 @@ func TestRunAgentWritesStructuredLogFile(t *testing.T) {
 	t.Setenv("FRITZ_LOG_LEVEL", "debug")
 
 	var output bytes.Buffer
-	err := run(context.Background(), []string{"run", "hi there"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Gateway {
+	err := run(context.Background(), []string{"run", "hi there"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Client {
 		return fakeGateway{response: "hello back"}
 	}, tool.NewRegistry())
 	if err != nil {
@@ -401,7 +402,7 @@ func TestRunAgentWithoutPrompt(t *testing.T) {
 
 	var output bytes.Buffer
 
-	err := run(context.Background(), []string{"run"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Gateway {
+	err := run(context.Background(), []string{"run"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Client {
 		t.Fatal("unexpected gateway creation")
 		return nil
 	}, tool.NewRegistry())
@@ -415,7 +416,7 @@ func TestRunAgentRejectsChatSubcommand(t *testing.T) {
 
 	var output bytes.Buffer
 
-	err := run(context.Background(), []string{"run", "chat"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Gateway {
+	err := run(context.Background(), []string{"run", "chat"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Client {
 		t.Fatal("unexpected gateway creation")
 		return nil
 	}, tool.NewRegistry())
@@ -437,7 +438,7 @@ func TestRunChatLoop(t *testing.T) {
 		[]string{"chat"},
 		strings.NewReader("hi\nwhat now\n:quit\n"),
 		&output,
-		func(_ config.Runtime) model.Gateway {
+		func(_ config.Runtime) model.Client {
 			return fakeGateway{
 				texts:         &lastTexts,
 				streamCalls:   &streamCalls,
@@ -481,7 +482,7 @@ func TestRunNoArgsDefaultsToChat(t *testing.T) {
 		nil,
 		strings.NewReader(":quit\n"),
 		&output,
-		func(_ config.Runtime) model.Gateway {
+		func(_ config.Runtime) model.Client {
 			return fakeGateway{streamCalls: &streamCalls}
 		},
 		tool.NewRegistry(),
@@ -506,7 +507,7 @@ func TestRunChatHelpAndReset(t *testing.T) {
 		[]string{"chat"},
 		strings.NewReader(":help\nhi\n:reset\nagain\n:quit\n"),
 		&output,
-		func(_ config.Runtime) model.Gateway {
+		func(_ config.Runtime) model.Client {
 			return fakeGateway{
 				texts:         &lastTexts,
 				response:      "ok",
@@ -557,7 +558,7 @@ func TestRunAgentToolLoopRead(t *testing.T) {
 		[]string{"run", "summarize README"},
 		strings.NewReader(""),
 		&output,
-		func(_ config.Runtime) model.Gateway {
+		func(_ config.Runtime) model.Client {
 			return fakeGateway{
 				streamDisabled: true,
 				generateCalls:  &generateCalls,
@@ -624,7 +625,7 @@ func TestRunAgentPersistsAndContinuesSession(t *testing.T) {
 	}()
 
 	var firstOutput bytes.Buffer
-	err = run(context.Background(), []string{"run", "hello"}, strings.NewReader(""), &firstOutput, func(_ config.Runtime) model.Gateway {
+	err = run(context.Background(), []string{"run", "hello"}, strings.NewReader(""), &firstOutput, func(_ config.Runtime) model.Client {
 		return fakeGateway{response: "world"}
 	}, tool.NewRegistry())
 	if err != nil {
@@ -646,7 +647,7 @@ func TestRunAgentPersistsAndContinuesSession(t *testing.T) {
 
 	var sawPrior bool
 	var secondOutput bytes.Buffer
-	err = run(context.Background(), []string{"--continue", "run", "again"}, strings.NewReader(""), &secondOutput, func(_ config.Runtime) model.Gateway {
+	err = run(context.Background(), []string{"--continue", "run", "again"}, strings.NewReader(""), &secondOutput, func(_ config.Runtime) model.Client {
 		return fakeGateway{
 			response: "done",
 			generateFunc: func(req model.Request, _ int) model.Response {
@@ -717,7 +718,7 @@ Use this skill.`), 0o644); err != nil {
 		[]string{"run", "/skill:task-pack-create build it"},
 		strings.NewReader(""),
 		&output,
-		func(_ config.Runtime) model.Gateway {
+		func(_ config.Runtime) model.Client {
 			return fakeGateway{
 				generateFunc: func(req model.Request, _ int) model.Response {
 					gotRequest = req
@@ -795,7 +796,7 @@ func TestRunTelegramPollOnce(t *testing.T) {
 	defer server.Close()
 
 	var output bytes.Buffer
-	err := run(
+	err := runWithProfile(
 		context.Background(),
 		[]string{
 			"--telegram-endpoint", server.URL,
@@ -807,10 +808,12 @@ func TestRunTelegramPollOnce(t *testing.T) {
 		},
 		strings.NewReader(""),
 		&output,
-		func(_ config.Runtime) model.Gateway {
+		func(_ config.Runtime) model.Client {
 			return fakeGateway{response: "pong"}
 		},
 		tool.NewRegistry(),
+		prompt.ProfileCoding,
+		true,
 	)
 	if err != nil {
 		t.Fatalf("run() error = %v", err)
@@ -860,7 +863,7 @@ func TestRunTelegramHeartbeatPollOnce(t *testing.T) {
 	defer server.Close()
 
 	var output bytes.Buffer
-	err := run(
+	err := runWithProfile(
 		context.Background(),
 		[]string{
 			"--telegram-endpoint", server.URL,
@@ -872,7 +875,7 @@ func TestRunTelegramHeartbeatPollOnce(t *testing.T) {
 		},
 		strings.NewReader(""),
 		&output,
-		func(_ config.Runtime) model.Gateway {
+		func(_ config.Runtime) model.Client {
 			return fakeGateway{
 				generateFunc: func(req model.Request, _ int) model.Response {
 					text := req.Messages[len(req.Messages)-1].Text()
@@ -890,6 +893,8 @@ func TestRunTelegramHeartbeatPollOnce(t *testing.T) {
 			}
 		},
 		tool.NewRegistry(),
+		prompt.ProfileCoding,
+		true,
 	)
 	if err != nil {
 		t.Fatalf("run() error = %v", err)
@@ -915,7 +920,7 @@ func TestRunAgentToolLoopStream(t *testing.T) {
 		[]string{"run", "summarize README"},
 		strings.NewReader(""),
 		&output,
-		func(_ config.Runtime) model.Gateway {
+		func(_ config.Runtime) model.Client {
 			return fakeGateway{
 				generateCalls: &generateCalls,
 				streamCalls:   &streamCalls,
@@ -975,7 +980,7 @@ func TestRunWrapsConfigErrors(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "test-key")
 
 	var output bytes.Buffer
-	err := run(context.Background(), []string{"--config", "/missing/config.json", "doctor"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Gateway {
+	err := run(context.Background(), []string{"--config", "/missing/config.json", "doctor"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Client {
 		t.Fatal("unexpected gateway creation")
 		return nil
 	}, tool.NewRegistry())
@@ -988,7 +993,7 @@ func TestRunWrapsPromptErrors(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "test-key")
 
 	var output bytes.Buffer
-	err := run(context.Background(), []string{"run", "/skill:nope"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Gateway {
+	err := run(context.Background(), []string{"run", "/skill:nope"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Client {
 		t.Fatal("unexpected gateway creation")
 		return nil
 	}, tool.NewRegistry())

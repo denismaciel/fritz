@@ -113,7 +113,7 @@ func (h *Host) ImportFromJSONL(ctx context.Context, path string) error {
 	return h.SwitchSession(ctx, path)
 }
 
-func NavigateTree(ctx context.Context, manager *Manager, targetID string, summarize bool, gateway model.Gateway, modelID string) (Context, error) {
+func NavigateTree(ctx context.Context, manager *Manager, targetID string, summarize bool, gateway model.Client, modelID string) (Context, error) {
 	_ = ctx
 	oldLeaf := manager.LeafID()
 	if !summarize {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"fritz/internal/gateway"
+	"fritz/internal/ingress"
 	"fritz/internal/logx"
 	"fritz/internal/transcription"
 )
@@ -22,11 +22,11 @@ type Client interface {
 }
 
 type Handler interface {
-	HandleInbound(context.Context, gateway.InboundMessage) (gateway.HandleResult, error)
+	HandleInbound(context.Context, ingress.InboundMessage) (ingress.HandleResult, error)
 }
 
 type Adapter struct {
-	paths   gateway.StatePaths
+	paths   ingress.StatePaths
 	client  Client
 	handler Handler
 	cfg     Config
@@ -41,7 +41,7 @@ type Config struct {
 
 func NewAdapter(stateRoot string, client Client, handler Handler, cfg Config) *Adapter {
 	root := filepath.Dir(stateRoot)
-	return NewAdapterWithPaths(gateway.StatePaths{
+	return NewAdapterWithPaths(ingress.StatePaths{
 		Root:                  root,
 		MetaPath:              filepath.Join(root, "meta.json"),
 		TelegramDir:           stateRoot,
@@ -53,7 +53,7 @@ func NewAdapter(stateRoot string, client Client, handler Handler, cfg Config) *A
 	}, client, handler, cfg)
 }
 
-func NewAdapterWithPaths(paths gateway.StatePaths, client Client, handler Handler, cfg Config) *Adapter {
+func NewAdapterWithPaths(paths ingress.StatePaths, client Client, handler Handler, cfg Config) *Adapter {
 	if cfg.PollTimeout <= 0 {
 		cfg.PollTimeout = 20 * time.Second
 	}
@@ -67,7 +67,7 @@ func NewAdapterWithPaths(paths gateway.StatePaths, client Client, handler Handle
 
 func (a *Adapter) PollOnce(ctx context.Context) (int, error) {
 	logger := logx.Component("telegram").With().Str("event", "telegram.poll.once").Logger()
-	if err := gateway.EnsureLayout(a.paths, time.Now().UTC()); err != nil {
+	if err := ingress.EnsureLayout(a.paths, time.Now().UTC()); err != nil {
 		logger.Error().Err(err).Str("stage", "layout").Msg("")
 		return 0, err
 	}
@@ -140,7 +140,7 @@ func (a *Adapter) PollOnce(ctx context.Context) (int, error) {
 		}
 		result, err := a.handler.HandleInbound(ctx, message)
 		if err != nil {
-			updateLogger.Error().Err(err).Str("stage", "gateway.handle").Msg("")
+			updateLogger.Error().Err(err).Str("stage", "ingress.handle").Msg("")
 			return processed, err
 		}
 		updateLogger.Info().
@@ -187,9 +187,9 @@ func (a *Adapter) Run(ctx context.Context) error {
 }
 
 func (a *Adapter) authorize(
-	message gateway.InboundMessage,
+	message ingress.InboundMessage,
 	allowedUsers map[string]struct{},
-	pairings *gateway.TelegramPairingFile,
+	pairings *ingress.TelegramPairingFile,
 ) (bool, string, bool) {
 	userID := strings.TrimSpace(message.UserID)
 	if _, ok := allowedUsers[userID]; ok && userID != "" {
@@ -197,21 +197,21 @@ func (a *Adapter) authorize(
 	}
 	if userID != "" && a.isPairingCommand(message) {
 		allowedUsers[userID] = struct{}{}
-		pairings.Paired = append(pairings.Paired, gateway.TelegramPairingRecord{
+		pairings.Paired = append(pairings.Paired, ingress.TelegramPairingRecord{
 			UserID:   userID,
 			ChatID:   strings.TrimSpace(message.ChatID),
 			PairedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		})
 		return false, "paired", true
 	}
-	if message.ChatType == gateway.ChatTypeDM {
+	if message.ChatType == ingress.ChatTypeDM {
 		return false, "not authorized", false
 	}
 	return false, "", false
 }
 
-func (a *Adapter) isPairingCommand(message gateway.InboundMessage) bool {
-	if message.ChatType != gateway.ChatTypeDM {
+func (a *Adapter) isPairingCommand(message ingress.InboundMessage) bool {
+	if message.ChatType != ingress.ChatTypeDM {
 		return false
 	}
 	token := strings.TrimSpace(a.cfg.PairingToken)
@@ -225,13 +225,13 @@ func (a *Adapter) isPairingCommand(message gateway.InboundMessage) bool {
 	return (text[0] == "/start" || text[0] == "/pair") && text[1] == token
 }
 
-func NormalizeUpdate(update Update) (gateway.InboundMessage, bool) {
+func NormalizeUpdate(update Update) (ingress.InboundMessage, bool) {
 	return normalizeUpdate(update, "")
 }
 
-func normalizeUpdate(update Update, transcript string) (gateway.InboundMessage, bool) {
+func normalizeUpdate(update Update, transcript string) (ingress.InboundMessage, bool) {
 	if update.Message == nil {
-		return gateway.InboundMessage{}, false
+		return ingress.InboundMessage{}, false
 	}
 	text := strings.TrimSpace(update.Message.Text)
 	if text == "" {
@@ -247,13 +247,13 @@ func normalizeUpdate(update Update, transcript string) (gateway.InboundMessage, 
 		}
 	}
 	if strings.TrimSpace(body) == "" {
-		return gateway.InboundMessage{}, false
+		return ingress.InboundMessage{}, false
 	}
-	chatType := gateway.ChatTypeGroup
+	chatType := ingress.ChatTypeGroup
 	if update.Message.Chat.Type == "private" {
-		chatType = gateway.ChatTypeDM
+		chatType = ingress.ChatTypeDM
 	}
-	message := gateway.InboundMessage{
+	message := ingress.InboundMessage{
 		Channel:  "telegram",
 		ChatType: chatType,
 		ChatID:   strconv.FormatInt(update.Message.Chat.ID, 10),
@@ -294,7 +294,7 @@ func normalizeUpdate(update Update, transcript string) (gateway.InboundMessage, 
 	return message, true
 }
 
-func (a *Adapter) normalizeUpdate(ctx context.Context, update Update) (gateway.InboundMessage, bool) {
+func (a *Adapter) normalizeUpdate(ctx context.Context, update Update) (ingress.InboundMessage, bool) {
 	message, ok := NormalizeUpdate(update)
 	if ok {
 		if !hasAudioAttachment(update.Message) {
@@ -373,14 +373,14 @@ func selectAudio(message *Message) (audioAttachment, bool) {
 }
 
 func (a *Adapter) loadOffset() (int64, error) {
-	state, exists, err := gateway.ReadJSONFile(a.paths.TelegramOffsetPath, gateway.TelegramOffsetFile{})
+	state, exists, err := ingress.ReadJSONFile(a.paths.TelegramOffsetPath, ingress.TelegramOffsetFile{})
 	if err != nil {
 		return 0, err
 	}
 	if exists {
 		if state.Version == 0 {
-			state.Version = gateway.CurrentStoreVersion
-			if err := gateway.WriteJSONFileAtomic(a.paths.TelegramOffsetPath, state); err != nil {
+			state.Version = ingress.CurrentStoreVersion
+			if err := ingress.WriteJSONFileAtomic(a.paths.TelegramOffsetPath, state); err != nil {
 				return 0, err
 			}
 		}
@@ -389,12 +389,12 @@ func (a *Adapter) loadOffset() (int64, error) {
 	var legacy struct {
 		NextOffset int64 `json:"nextOffset"`
 	}
-	legacy, exists, err = gateway.ReadJSONFile(a.paths.TelegramOffsetPath, legacy)
+	legacy, exists, err = ingress.ReadJSONFile(a.paths.TelegramOffsetPath, legacy)
 	if err != nil || !exists {
 		return 0, err
 	}
-	state = gateway.TelegramOffsetFile{Version: gateway.CurrentStoreVersion, NextOffset: legacy.NextOffset}
-	if err := gateway.WriteJSONFileAtomic(a.paths.TelegramOffsetPath, state); err != nil {
+	state = ingress.TelegramOffsetFile{Version: ingress.CurrentStoreVersion, NextOffset: legacy.NextOffset}
+	if err := ingress.WriteJSONFileAtomic(a.paths.TelegramOffsetPath, state); err != nil {
 		return 0, err
 	}
 	return state.NextOffset, nil
@@ -408,7 +408,7 @@ func (a *Adapter) loadAllowedUsers() (map[string]struct{}, error) {
 			allowed[userID] = struct{}{}
 		}
 	}
-	state, exists, err := gateway.ReadJSONFile(a.paths.TelegramAllowlistPath, gateway.TelegramAllowlistFile{})
+	state, exists, err := ingress.ReadJSONFile(a.paths.TelegramAllowlistPath, ingress.TelegramAllowlistFile{})
 	if err != nil {
 		return nil, err
 	}
@@ -416,20 +416,20 @@ func (a *Adapter) loadAllowedUsers() (map[string]struct{}, error) {
 		var legacy struct {
 			Users []string `json:"users"`
 		}
-		legacy, exists, err = gateway.ReadJSONFile(a.paths.TelegramAllowlistPath, legacy)
+		legacy, exists, err = ingress.ReadJSONFile(a.paths.TelegramAllowlistPath, legacy)
 		if err != nil {
 			return nil, err
 		}
 		if exists {
-			state = gateway.TelegramAllowlistFile{Version: gateway.CurrentStoreVersion, Users: legacy.Users}
-			if err := gateway.WriteJSONFileAtomic(a.paths.TelegramAllowlistPath, state); err != nil {
+			state = ingress.TelegramAllowlistFile{Version: ingress.CurrentStoreVersion, Users: legacy.Users}
+			if err := ingress.WriteJSONFileAtomic(a.paths.TelegramAllowlistPath, state); err != nil {
 				return nil, err
 			}
 		}
 	}
 	if state.Version == 0 && exists {
-		state.Version = gateway.CurrentStoreVersion
-		if err := gateway.WriteJSONFileAtomic(a.paths.TelegramAllowlistPath, state); err != nil {
+		state.Version = ingress.CurrentStoreVersion
+		if err := ingress.WriteJSONFileAtomic(a.paths.TelegramAllowlistPath, state); err != nil {
 			return nil, err
 		}
 	}
@@ -443,8 +443,8 @@ func (a *Adapter) loadAllowedUsers() (map[string]struct{}, error) {
 }
 
 func (a *Adapter) saveOffset(nextOffset int64) error {
-	return gateway.WriteJSONFileAtomic(a.paths.TelegramOffsetPath, gateway.TelegramOffsetFile{
-		Version:    gateway.CurrentStoreVersion,
+	return ingress.WriteJSONFileAtomic(a.paths.TelegramOffsetPath, ingress.TelegramOffsetFile{
+		Version:    ingress.CurrentStoreVersion,
 		NextOffset: nextOffset,
 	})
 }
@@ -457,37 +457,37 @@ func (a *Adapter) saveAllowedUsers(users map[string]struct{}) error {
 		}
 	}
 	sort.Strings(list)
-	return gateway.WriteJSONFileAtomic(a.paths.TelegramAllowlistPath, gateway.TelegramAllowlistFile{
-		Version: gateway.CurrentStoreVersion,
+	return ingress.WriteJSONFileAtomic(a.paths.TelegramAllowlistPath, ingress.TelegramAllowlistFile{
+		Version: ingress.CurrentStoreVersion,
 		Users:   list,
 	})
 }
 
-func (a *Adapter) loadPairings() (gateway.TelegramPairingFile, error) {
-	state, exists, err := gateway.ReadJSONFile(a.paths.TelegramPairingPath, gateway.TelegramPairingFile{})
+func (a *Adapter) loadPairings() (ingress.TelegramPairingFile, error) {
+	state, exists, err := ingress.ReadJSONFile(a.paths.TelegramPairingPath, ingress.TelegramPairingFile{})
 	if err != nil {
-		return gateway.TelegramPairingFile{}, err
+		return ingress.TelegramPairingFile{}, err
 	}
 	if !exists {
-		return gateway.TelegramPairingFile{Version: gateway.CurrentStoreVersion, Paired: []gateway.TelegramPairingRecord{}}, nil
+		return ingress.TelegramPairingFile{Version: ingress.CurrentStoreVersion, Paired: []ingress.TelegramPairingRecord{}}, nil
 	}
 	if state.Version == 0 {
-		state.Version = gateway.CurrentStoreVersion
+		state.Version = ingress.CurrentStoreVersion
 	}
 	if state.Paired == nil {
-		state.Paired = []gateway.TelegramPairingRecord{}
+		state.Paired = []ingress.TelegramPairingRecord{}
 	}
 	return state, nil
 }
 
-func (a *Adapter) savePairings(state gateway.TelegramPairingFile) error {
+func (a *Adapter) savePairings(state ingress.TelegramPairingFile) error {
 	if state.Version == 0 {
-		state.Version = gateway.CurrentStoreVersion
+		state.Version = ingress.CurrentStoreVersion
 	}
 	if state.Paired == nil {
-		state.Paired = []gateway.TelegramPairingRecord{}
+		state.Paired = []ingress.TelegramPairingRecord{}
 	}
-	return gateway.WriteJSONFileAtomic(a.paths.TelegramPairingPath, state)
+	return ingress.WriteJSONFileAtomic(a.paths.TelegramPairingPath, state)
 }
 
 func (a *Adapter) sendReply(ctx context.Context, chatID string, text string) error {

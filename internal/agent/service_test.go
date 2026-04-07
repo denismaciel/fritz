@@ -18,7 +18,7 @@ import (
 func TestRuntimeSubmitStreamsTextEvents(t *testing.T) {
 	dir := t.TempDir()
 	cfg := testConfig(t, dir)
-	service := NewService(dir, cfg, func(_ config.Runtime) model.Gateway {
+	service := NewService(dir, cfg, func(_ config.Runtime) model.Client {
 		return &testGateway{
 			streamFunc: func(_ context.Context, _ model.Request, emit func(model.StreamEvent) error) (model.Response, error) {
 				_ = emit(model.StreamEvent{TextDelta: "he"})
@@ -68,7 +68,7 @@ func TestRuntimeSubmitStreamsTextEvents(t *testing.T) {
 func TestRuntimeSubmitStreamsReasoningEvents(t *testing.T) {
 	dir := t.TempDir()
 	cfg := testConfig(t, dir)
-	service := NewService(dir, cfg, func(_ config.Runtime) model.Gateway {
+	service := NewService(dir, cfg, func(_ config.Runtime) model.Client {
 		return &testGateway{
 			streamFunc: func(_ context.Context, _ model.Request, emit func(model.StreamEvent) error) (model.Response, error) {
 				_ = emit(model.StreamEvent{ReasoningDelta: "reason "})
@@ -125,7 +125,7 @@ func TestRuntimeSubmitEmitsToolEvents(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("hello from file"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	service := NewService(dir, cfg, func(_ config.Runtime) model.Gateway {
+	service := NewService(dir, cfg, func(_ config.Runtime) model.Client {
 		return &testGateway{
 			generateFunc: func(req model.Request, call int) (model.Response, error) {
 				if call == 1 {
@@ -194,7 +194,7 @@ func TestRuntimeSubmitEmitsToolEvents(t *testing.T) {
 func TestServiceCancelStopsActiveRun(t *testing.T) {
 	dir := t.TempDir()
 	cfg := testConfig(t, dir)
-	service := NewService(dir, cfg, func(_ config.Runtime) model.Gateway {
+	service := NewService(dir, cfg, func(_ config.Runtime) model.Client {
 		return &testGateway{
 			streamFunc: func(ctx context.Context, _ model.Request, _ func(model.StreamEvent) error) (model.Response, error) {
 				<-ctx.Done()
@@ -237,7 +237,7 @@ func TestRuntimeSubmitCompactsBeforeModelCallWhenTokenThresholdHit(t *testing.T)
 	cfg.Session.CompactThresholdTurns = 100
 
 	var requests []model.Request
-	service := NewService(dir, cfg, func(_ config.Runtime) model.Gateway {
+	service := NewService(dir, cfg, func(_ config.Runtime) model.Client {
 		return &testGateway{
 			generateFunc: func(req model.Request, call int) (model.Response, error) {
 				requests = append(requests, req)
@@ -303,7 +303,7 @@ func TestRuntimeSubmitUsesCodingPromptProfileByDefault(t *testing.T) {
 	}
 
 	var request model.Request
-	service := NewService(dir, cfg, func(_ config.Runtime) model.Gateway {
+	service := NewService(dir, cfg, func(_ config.Runtime) model.Client {
 		return &testGateway{
 			generateFunc: func(req model.Request, _ int) (model.Response, error) {
 				request = req
@@ -347,7 +347,7 @@ func TestRuntimeSubmitUsesGatewayPromptProfile(t *testing.T) {
 	}
 
 	var request model.Request
-	service := NewServiceWithPromptProfile(dir, cfg, func(_ config.Runtime) model.Gateway {
+	service := NewServiceWithPromptProfile(dir, cfg, func(_ config.Runtime) model.Client {
 		return &testGateway{
 			generateFunc: func(req model.Request, _ int) (model.Response, error) {
 				request = req

@@ -21,7 +21,8 @@ import (
 	"fritz/internal/command"
 	"fritz/internal/config"
 	"fritz/internal/engine"
-	gatewayruntime "fritz/internal/gateway"
+	ingressruntime "fritz/internal/ingress"
+	"fritz/internal/adapters/telegram"
 	"fritz/internal/gemini"
 	"fritz/internal/heartbeat"
 	"fritz/internal/httpapi"
@@ -32,7 +33,6 @@ import (
 	"fritz/internal/provider"
 	"fritz/internal/reminderwake"
 	"fritz/internal/session"
-	"fritz/internal/telegram"
 	"fritz/internal/terminalui"
 	"fritz/internal/tool"
 	transcriptiongemini "fritz/internal/transcription/gemini"
@@ -40,10 +40,14 @@ import (
 )
 
 func Run(ctx context.Context, args []string) error {
+	return RunAgent(ctx, args)
+}
+
+func RunAgent(ctx context.Context, args []string) error {
 	cwd := mustGetwd()
-	return runWithProfile(ctx, args, os.Stdin, os.Stdout, func(cfg config.Runtime) model.Gateway {
-		return defaultGatewayFactory(cwd, cfg)
-	}, nil, prompt.ProfileCoding)
+	return runWithProfile(ctx, args, os.Stdin, os.Stdout, func(cfg config.Runtime) model.Client {
+		return defaultClientFactory(cwd, cfg)
+	}, nil, prompt.ProfileCoding, false)
 }
 
 var newHeartbeatSource = func(config.Runtime) heartbeat.Source {
@@ -55,7 +59,7 @@ var openBrowserURL = tryOpenBrowser
 var startOpenAICodexCallbackServer = openaicodex.StartCallbackServer
 var exchangeOpenAICodexAuthorizationCode = openaicodex.ExchangeAuthorizationCode
 
-func defaultGatewayFactory(cwd string, cfg config.Runtime) model.Gateway {
+func defaultClientFactory(cwd string, cfg config.Runtime) model.Client {
 	switch cfg.Provider {
 	case provider.OpenAICodex:
 		resolver := auth.NewResolver(authstore.NewGlobalFileStore())
@@ -74,11 +78,11 @@ func defaultGatewayFactory(cwd string, cfg config.Runtime) model.Gateway {
 	}
 }
 
-func RunWithGateway(ctx context.Context, args []string) error {
+func RunTelegramProcess(ctx context.Context, args []string) error {
 	cwd := mustGetwd()
-	return runWithProfile(ctx, args, os.Stdin, os.Stdout, func(cfg config.Runtime) model.Gateway {
-		return defaultGatewayFactory(cwd, cfg)
-	}, nil, prompt.ProfileGateway)
+	return runTelegramProcess(ctx, args, os.Stdout, cwd, func(cfg config.Runtime) model.Client {
+		return defaultClientFactory(cwd, cfg)
+	}, nil)
 }
 
 func run(
@@ -86,10 +90,10 @@ func run(
 	args []string,
 	in io.Reader,
 	out io.Writer,
-	newGateway func(cfg config.Runtime) model.Gateway,
+	newClient func(cfg config.Runtime) model.Client,
 	registry *tool.Registry,
 ) error {
-	return runWithProfile(ctx, args, in, out, newGateway, registry, prompt.ProfileCoding)
+	return runWithProfile(ctx, args, in, out, newClient, registry, prompt.ProfileCoding, false)
 }
 
 func runWithProfile(
@@ -97,9 +101,10 @@ func runWithProfile(
 	args []string,
 	in io.Reader,
 	out io.Writer,
-	newGateway func(cfg config.Runtime) model.Gateway,
+	newClient func(cfg config.Runtime) model.Client,
 	registry *tool.Registry,
 	profile prompt.Profile,
+	allowTelegram bool,
 ) error {
 	cmd, err := command.Parse(args)
 	if err != nil {
@@ -119,7 +124,7 @@ func runWithProfile(
 			return wrapError("config", err)
 		}
 		defer closeLogger()
-		printUsage(out)
+		printAgentUsage(out)
 		return nil
 	case command.Doctor:
 		cfg, err := resolveRuntimeConfig(cwd, cmd.Config)
@@ -142,7 +147,7 @@ func runWithProfile(
 			return wrapError("config", err)
 		}
 		defer closeLogger()
-		return runAgent(ctx, out, cwd, cmd, cfg, newGateway, registry, profile)
+		return runAgent(ctx, out, cwd, cmd, cfg, newClient, registry, profile)
 	case command.Chat:
 		cfg, err := resolveRuntimeConfig(cwd, cmd.Config)
 		if err != nil {
@@ -153,7 +158,7 @@ func runWithProfile(
 			return wrapError("config", err)
 		}
 		defer closeLogger()
-		return runChat(ctx, in, out, cwd, cmd, cfg, newGateway, registry, profile)
+		return runChat(ctx, in, out, cwd, cmd, cfg, newClient, registry, profile)
 	case command.Serve:
 		cfg, err := resolveRuntimeConfig(cwd, cmd.Config)
 		if err != nil {
@@ -164,8 +169,11 @@ func runWithProfile(
 			return wrapError("config", err)
 		}
 		defer closeLogger()
-		return runServe(ctx, out, cwd, cmd, cfg, newGateway, registry, profile)
+		return runServe(ctx, out, cwd, cmd, cfg, newClient, registry, profile)
 	case command.Telegram:
+		if !allowTelegram {
+			return wrapError("command", errors.New("use fritz-telegram"))
+		}
 		cfg, err := resolveRuntimeConfig(cwd, cmd.Config)
 		if err != nil {
 			return wrapError("config", err)
@@ -175,7 +183,7 @@ func runWithProfile(
 			return wrapError("config", err)
 		}
 		defer closeLogger()
-		return runTelegram(ctx, out, cwd, cmd, cfg, newGateway, registry)
+		return runTelegram(ctx, out, cwd, cmd, cfg, newClient, registry)
 	case command.AuthLogin:
 		cfg, err := resolveRuntimeConfig(cwd, cmd.Config)
 		if err != nil {
@@ -302,7 +310,7 @@ func runAgent(
 	cwd string,
 	cmd command.Run,
 	cfg config.Runtime,
-	newGateway func(cfg config.Runtime) model.Gateway,
+	newClient func(cfg config.Runtime) model.Client,
 	registry *tool.Registry,
 	profile prompt.Profile,
 ) error {
@@ -319,7 +327,7 @@ func runAgent(
 	if err := validateProviderAccess(ctx, cwd, cfg); err != nil {
 		return wrapError("config", err)
 	}
-	service := newService(cwd, cfg, newGateway, registry, profile)
+	service := newService(cwd, cfg, newClient, registry, profile)
 	runtime, err := service.NewRuntime(ctx, agent.RuntimeOptions{
 		Session: session.StartOptions{
 			Continue:    cmd.Session.Continue,
@@ -349,7 +357,7 @@ func runChat(
 	cwd string,
 	cmd command.Chat,
 	cfg config.Runtime,
-	newGateway func(cfg config.Runtime) model.Gateway,
+	newClient func(cfg config.Runtime) model.Client,
 	registry *tool.Registry,
 	profile prompt.Profile,
 ) error {
@@ -360,7 +368,7 @@ func runChat(
 	if err := validateProviderAccess(ctx, cwd, cfg); err != nil {
 		return wrapError("config", err)
 	}
-	service := newService(cwd, cfg, newGateway, registry, profile)
+	service := newService(cwd, cfg, newClient, registry, profile)
 	runtime, err := service.NewRuntime(ctx, agent.RuntimeOptions{
 		Session: session.StartOptions{
 			Continue:    cmd.Session.Continue,
@@ -431,7 +439,7 @@ func isInteractiveTTY(in io.Reader, out io.Writer) bool {
 	return term.IsTerminal(int(inFile.Fd())) && term.IsTerminal(int(outFile.Fd()))
 }
 
-func printUsage(out io.Writer) {
+func printAgentUsage(out io.Writer) {
 	fmt.Fprintln(out, brand.CLIName)
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "usage:")
@@ -440,7 +448,6 @@ func printUsage(out io.Writer) {
 	fmt.Fprintf(out, "  %s run <prompt>\n", brand.CLIName)
 	fmt.Fprintf(out, "  %s chat\n", brand.CLIName)
 	fmt.Fprintf(out, "  %s serve\n", brand.CLIName)
-	fmt.Fprintf(out, "  %s telegram [--poll-once]\n", brand.CLIName)
 	fmt.Fprintf(out, "  %s auth login <provider>\n", brand.CLIName)
 	fmt.Fprintf(out, "  %s auth logout <provider>\n", brand.CLIName)
 	fmt.Fprintf(out, "  %s auth status [provider]\n", brand.CLIName)
@@ -460,13 +467,6 @@ func printUsage(out io.Writer) {
 	fmt.Fprintln(out, "  --openai-codex-client-id <id>")
 	fmt.Fprintln(out, "  --openai-codex-originator <value>")
 	fmt.Fprintln(out, "  --openai-codex-redirect-url <url>")
-	fmt.Fprintln(out, "  --telegram-bot-token <token>")
-	fmt.Fprintln(out, "  --telegram-endpoint <url>")
-	fmt.Fprintln(out, "  --telegram-poll-timeout <duration>")
-	fmt.Fprintln(out, "  --telegram-pairing-token <token>")
-	fmt.Fprintln(out, "  --telegram-allow-user <id>")
-	fmt.Fprintln(out, "  --heartbeat=<bool>")
-	fmt.Fprintln(out, "  --heartbeat-interval <duration>")
 	fmt.Fprintln(out, "  --log-file <path>")
 	fmt.Fprintln(out, "  --log-level <level>")
 	fmt.Fprintln(out, "  --server <url>")
@@ -486,6 +486,32 @@ func printUsage(out io.Writer) {
 	fmt.Fprintln(out, "  --fork <path>")
 	fmt.Fprintln(out, "  --new-session")
 	fmt.Fprintln(out, "  --no-session")
+}
+
+func printGatewayUsage(out io.Writer) {
+	fmt.Fprintln(out, "fritz-telegram")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "usage:")
+	fmt.Fprintln(out, "  fritz-telegram [--poll-once]")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "config flags:")
+	fmt.Fprintln(out, "  --telegram-bot-token <token>")
+	fmt.Fprintln(out, "  --telegram-endpoint <url>")
+	fmt.Fprintln(out, "  --telegram-poll-timeout <duration>")
+	fmt.Fprintln(out, "  --telegram-pairing-token <token>")
+	fmt.Fprintln(out, "  --telegram-allow-user <id>")
+	fmt.Fprintln(out, "  --heartbeat=<bool>")
+	fmt.Fprintln(out, "  --heartbeat-interval <duration>")
+	fmt.Fprintln(out, "  --log-file <path>")
+	fmt.Fprintln(out, "  --log-level <level>")
+	fmt.Fprintln(out, "  --provider <name>")
+	fmt.Fprintln(out, "  --model <id>")
+	fmt.Fprintln(out, "  --gemini-endpoint <url>")
+	fmt.Fprintln(out, "  --openai-codex-endpoint <url>")
+	fmt.Fprintln(out, "  --openai-codex-auth-base-url <url>")
+	fmt.Fprintln(out, "  --openai-codex-client-id <id>")
+	fmt.Fprintln(out, "  --openai-codex-originator <value>")
+	fmt.Fprintln(out, "  --openai-codex-redirect-url <url>")
 }
 
 func configSourceFromCommand(options command.ConfigOptions) config.Source {
@@ -678,8 +704,8 @@ func tryOpenBrowser(ctx context.Context, target string) error {
 	return errors.New("no browser opener found")
 }
 
-func newService(cwd string, cfg config.Runtime, newGateway func(cfg config.Runtime) model.Gateway, registry *tool.Registry, profile prompt.Profile) *agent.Service {
-	return agent.NewServiceWithPromptProfile(cwd, cfg, newGateway, func(cfg config.Runtime) *tool.Registry {
+func newService(cwd string, cfg config.Runtime, newClient func(cfg config.Runtime) model.Client, registry *tool.Registry, profile prompt.Profile) *agent.Service {
+	return agent.NewServiceWithPromptProfile(cwd, cfg, newClient, func(cfg config.Runtime) *tool.Registry {
 		if registry != nil {
 			return registry
 		}
@@ -724,7 +750,7 @@ func runTelegram(
 	cwd string,
 	cmd command.Telegram,
 	cfg config.Runtime,
-	newGateway func(cfg config.Runtime) model.Gateway,
+	newClient func(cfg config.Runtime) model.Client,
 	registry *tool.Registry,
 ) error {
 	_ = out
@@ -734,8 +760,8 @@ func runTelegram(
 	if err := cfg.ValidateTelegram(); err != nil {
 		return wrapError("config", err)
 	}
-	service := newService(cwd, cfg, newGateway, registry, prompt.ProfileGateway)
-	gw := gatewayruntime.New(cwd, cfg, engine.WrapService(service))
+	service := newService(cwd, cfg, newClient, registry, prompt.ProfileGateway)
+	gw := ingressruntime.New(cwd, cfg, engine.WrapService(service))
 	client := telegram.NewHTTPClient(http.DefaultClient, cfg.Telegram.Endpoint, cfg.Telegram.BotToken)
 	adapter := telegram.NewAdapterWithPaths(gw.Paths(), client, gw, telegram.Config{
 		PollTimeout:  cfg.Telegram.PollTimeout,
@@ -886,7 +912,7 @@ func runServe(
 	cwd string,
 	cmd command.Serve,
 	cfg config.Runtime,
-	newGateway func(cfg config.Runtime) model.Gateway,
+	newClient func(cfg config.Runtime) model.Client,
 	registry *tool.Registry,
 	profile prompt.Profile,
 ) error {
@@ -897,7 +923,7 @@ func runServe(
 	if listen == "" {
 		listen = ":8080"
 	}
-	service := newService(cwd, cfg, newGateway, registry, profile)
+	service := newService(cwd, cfg, newClient, registry, profile)
 	server := &http.Server{
 		Addr:    listen,
 		Handler: httpapi.NewHandler(engine.WrapService(service)),
@@ -914,4 +940,35 @@ func runServe(
 		return err
 	}
 	return nil
+}
+
+func runTelegramProcess(
+	ctx context.Context,
+	args []string,
+	out io.Writer,
+	cwd string,
+	newClient func(config.Runtime) model.Client,
+	registry *tool.Registry,
+) error {
+	if len(args) == 1 {
+		switch args[0] {
+		case "help", "--help", "-h":
+			printGatewayUsage(out)
+			return nil
+		}
+	}
+	cmd, err := command.ParseTelegramProcess(args)
+	if err != nil {
+		return wrapError("command", err)
+	}
+	cfg, err := resolveRuntimeConfig(cwd, cmd.Config)
+	if err != nil {
+		return wrapError("config", err)
+	}
+	closeLogger, err := configureLogger(cwd, cfg)
+	if err != nil {
+		return wrapError("config", err)
+	}
+	defer closeLogger()
+	return runTelegram(ctx, out, cwd, cmd, cfg, newClient, registry)
 }

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"fritz/internal/engine"
-	"fritz/internal/gateway"
+	"fritz/internal/ingress"
 	"fritz/internal/transcription"
 )
 
@@ -25,7 +25,7 @@ func TestNormalizeUpdatePrivateMessage(t *testing.T) {
 	if !ok {
 		t.Fatal("NormalizeUpdate() ok = false")
 	}
-	if msg.Channel != "telegram" || msg.ChatType != gateway.ChatTypeDM || msg.UserID != "7" || msg.ChatID != "42" || msg.Text != "hi" {
+	if msg.Channel != "telegram" || msg.ChatType != ingress.ChatTypeDM || msg.UserID != "7" || msg.ChatID != "42" || msg.Text != "hi" {
 		t.Fatalf("NormalizeUpdate() = %#v", msg)
 	}
 }
@@ -46,7 +46,7 @@ func TestNormalizeUpdateGroupMessageIncludesMetadata(t *testing.T) {
 	if !ok {
 		t.Fatal("NormalizeUpdate() ok = false")
 	}
-	if msg.ChatType != gateway.ChatTypeGroup {
+	if msg.ChatType != ingress.ChatTypeGroup {
 		t.Fatalf("ChatType = %q", msg.ChatType)
 	}
 	if msg.Metadata["chat_title"] != "grp" || msg.Metadata["from_username"] != "alice" || msg.Metadata["document_name"] != "x.txt" {
@@ -75,8 +75,8 @@ func TestAdapterPollOnceTranscribesVoiceMessage(t *testing.T) {
 		},
 	}
 	handler := &captureHandler{
-		result: gateway.HandleResult{
-			Messages: []gateway.OutboundMessage{{
+		result: ingress.HandleResult{
+			Messages: []ingress.OutboundMessage{{
 				Channel: "telegram",
 				ChatID:  "42",
 				Text:    "pong",
@@ -199,10 +199,10 @@ func TestAdapterPollOnceRoutesRepliesAndPersistsOffset(t *testing.T) {
 		},
 	}
 	handler := fakeHandler{
-		result: gateway.HandleResult{
+		result: ingress.HandleResult{
 			SessionKey: "telegram:dm:7",
 			Session:    engine.SessionRef{ID: "s1", Path: "/tmp/s1.jsonl"},
-			Messages: []gateway.OutboundMessage{{
+			Messages: []ingress.OutboundMessage{{
 				Channel: "telegram",
 				ChatID:  "42",
 				Text:    "pong",
@@ -288,8 +288,8 @@ func TestAdapterPairsThenAllowsUser(t *testing.T) {
 		}},
 	}
 	handler := &countingHandler{
-		result: gateway.HandleResult{
-			Messages: []gateway.OutboundMessage{{
+		result: ingress.HandleResult{
+			Messages: []ingress.OutboundMessage{{
 				Channel: "telegram",
 				ChatID:  "42",
 				Text:    "pong",
@@ -408,33 +408,33 @@ func (f *fakeClient) DownloadFile(_ context.Context, filePath string) ([]byte, e
 }
 
 type fakeHandler struct {
-	result gateway.HandleResult
+	result ingress.HandleResult
 	err    error
 }
 
-func (f fakeHandler) HandleInbound(_ context.Context, _ gateway.InboundMessage) (gateway.HandleResult, error) {
+func (f fakeHandler) HandleInbound(_ context.Context, _ ingress.InboundMessage) (ingress.HandleResult, error) {
 	return f.result, f.err
 }
 
 type countingHandler struct {
-	result gateway.HandleResult
+	result ingress.HandleResult
 	err    error
 	calls  int
 }
 
-func (f *countingHandler) HandleInbound(_ context.Context, _ gateway.InboundMessage) (gateway.HandleResult, error) {
+func (f *countingHandler) HandleInbound(_ context.Context, _ ingress.InboundMessage) (ingress.HandleResult, error) {
 	f.calls++
 	return f.result, f.err
 }
 
 type captureHandler struct {
-	result gateway.HandleResult
+	result ingress.HandleResult
 	err    error
 	calls  int
-	last   gateway.InboundMessage
+	last   ingress.InboundMessage
 }
 
-func (f *captureHandler) HandleInbound(_ context.Context, msg gateway.InboundMessage) (gateway.HandleResult, error) {
+func (f *captureHandler) HandleInbound(_ context.Context, msg ingress.InboundMessage) (ingress.HandleResult, error) {
 	f.calls++
 	f.last = msg
 	return f.result, f.err
