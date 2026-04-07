@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"fritz/internal/adapters/telegram"
 	"fritz/internal/agent"
 	"fritz/internal/auth"
 	"fritz/internal/authstore"
@@ -21,11 +22,10 @@ import (
 	"fritz/internal/command"
 	"fritz/internal/config"
 	"fritz/internal/engine"
-	ingressruntime "fritz/internal/ingress"
-	"fritz/internal/adapters/telegram"
 	"fritz/internal/gemini"
 	"fritz/internal/heartbeat"
 	"fritz/internal/httpapi"
+	ingressruntime "fritz/internal/ingress"
 	"fritz/internal/logx"
 	"fritz/internal/model"
 	"fritz/internal/openaicodex"
@@ -54,6 +54,10 @@ var newHeartbeatSource = func(config.Runtime) heartbeat.Source {
 	return heartbeat.NullSource{}
 }
 
+var newAuthStore = func() authstore.Store {
+	return authstore.NewGlobalFileStore()
+}
+
 var createOpenAICodexAuthorizationFlow = openaicodex.CreateAuthorizationFlow
 var openBrowserURL = tryOpenBrowser
 var startOpenAICodexCallbackServer = openaicodex.StartCallbackServer
@@ -62,7 +66,7 @@ var exchangeOpenAICodexAuthorizationCode = openaicodex.ExchangeAuthorizationCode
 func defaultClientFactory(cwd string, cfg config.Runtime) model.Client {
 	switch cfg.Provider {
 	case provider.OpenAICodex:
-		resolver := auth.NewResolver(authstore.NewGlobalFileStore())
+		resolver := auth.NewResolver(newAuthStore())
 		return openaicodex.NewClient(func(ctx context.Context) (provider.RequestAuth, error) {
 			return resolver.Resolve(ctx, cfg)
 		},
@@ -291,7 +295,7 @@ func runDoctor(cwd string, out io.Writer, cfg config.Runtime) error {
 		fmt.Fprintf(out, "oauth_client_id: %s\n", cfg.OpenAICodexClientID)
 		fmt.Fprintf(out, "oauth_redirect_url: %s\n", cfg.OpenAICodexRedirectURL)
 		status := "missing"
-		if entry, ok, err := authstore.NewGlobalFileStore().Get(provider.OpenAICodex); err == nil && ok {
+		if entry, ok, err := newAuthStore().Get(provider.OpenAICodex); err == nil && ok {
 			status = authstore.FormatStatus(entry)
 		}
 		fmt.Fprintf(out, "openai_codex_auth: %s\n", status)
@@ -587,7 +591,7 @@ func runAuthLogout(out io.Writer, cwd string, cfg config.Runtime, cmd command.Au
 	if err != nil {
 		return err
 	}
-	deleted, err := authstore.NewGlobalFileStore().Delete(kind)
+	deleted, err := newAuthStore().Delete(kind)
 	if err != nil {
 		return err
 	}
@@ -600,7 +604,7 @@ func runAuthLogout(out io.Writer, cwd string, cfg config.Runtime, cmd command.Au
 }
 
 func runAuthStatus(out io.Writer, cwd string, cfg config.Runtime, cmd command.AuthStatus) error {
-	store := authstore.NewGlobalFileStore()
+	store := newAuthStore()
 	if strings.TrimSpace(cmd.Provider) != "" {
 		return printAuthStatus(out, store, cfg, cmd.Provider)
 	}
@@ -682,7 +686,7 @@ func runOpenAICodexLogin(ctx context.Context, in io.Reader, out io.Writer, cwd s
 	if err != nil {
 		return err
 	}
-	if err := authstore.NewGlobalFileStore().PutOAuth(provider.OpenAICodex, creds); err != nil {
+	if err := newAuthStore().PutOAuth(provider.OpenAICodex, creds); err != nil {
 		return err
 	}
 	fmt.Fprintln(out, "auth stored: openai-codex")
@@ -717,7 +721,7 @@ func validateProviderAccess(ctx context.Context, cwd string, cfg config.Runtime)
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
-	_, err := auth.NewResolver(authstore.NewGlobalFileStore()).Resolve(ctx, cfg)
+	_, err := auth.NewResolver(newAuthStore()).Resolve(ctx, cfg)
 	return err
 }
 

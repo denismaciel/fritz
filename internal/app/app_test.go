@@ -37,6 +37,17 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func useAuthStore(t *testing.T, store authstore.Store) {
+	t.Helper()
+	prev := newAuthStore
+	newAuthStore = func() authstore.Store {
+		return store
+	}
+	t.Cleanup(func() {
+		newAuthStore = prev
+	})
+}
+
 func TestDefaultToolRegistryHasCodingTools(t *testing.T) {
 	defs := defaultToolRegistry().Definitions()
 	if len(defs) != 14 {
@@ -81,6 +92,7 @@ func TestRunDoctorWithAPIKey(t *testing.T) {
 func TestRunDoctorOpenAICodex(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "")
 	t.Setenv("FRITZ_PROVIDER", "openai-codex")
+	useAuthStore(t, authstore.NewFileStore(t.TempDir()))
 
 	output := captureStdout(t, func() {
 		err := Run(context.Background(), []string{"doctor"})
@@ -189,6 +201,7 @@ func TestRunAuthStatusWithStoredOAuth(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("PutOAuth() error = %v", err)
 	}
+	useAuthStore(t, store)
 
 	var output bytes.Buffer
 	err = run(context.Background(), []string{"auth", "status", "openai-codex"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Client {
@@ -223,6 +236,7 @@ func TestRunAuthLogout(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("PutOAuth() error = %v", err)
 	}
+	useAuthStore(t, store)
 
 	var output bytes.Buffer
 	err = run(context.Background(), []string{"auth", "logout", "openai-codex"}, strings.NewReader(""), &output, func(_ config.Runtime) model.Client {
@@ -280,6 +294,7 @@ func TestRunAuthLoginOpenAICodexManual(t *testing.T) {
 		startOpenAICodexCallbackServer = prevStartServer
 		exchangeOpenAICodexAuthorizationCode = prevExchange
 	}()
+	useAuthStore(t, authstore.NewFileStore(dir))
 
 	var output bytes.Buffer
 	err = run(
@@ -326,6 +341,7 @@ func TestDefaultGatewayFactoryOpenAICodex(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("PutOAuth() error = %v", err)
 	}
+	useAuthStore(t, store)
 
 	cfg := config.Resolve(config.Sources{
 		Defaults: config.DefaultSource(),
