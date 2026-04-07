@@ -1,0 +1,4 @@
+{
+  "template_source": "/tmp/pi-mono/packages/coding-agent/src/core/system-prompt.ts",
+  "output_file": "default_system_prompt_template.md"
+}

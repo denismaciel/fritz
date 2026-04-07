@@ -1,0 +1,581 @@
+[
+  {
+    "file": "codex-rs/core/src/codex/rollout_reconstruction_tests.rs",
+    "line": 653,
+    "name": "record_initial_history_resumed_rollback_drops_incomplete_user_turn_compaction_metadata",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "record_initial_history_resumed_rollback_drops_incomplete_user_turn_compaction_metadata"
+  },
+  {
+    "file": "codex-rs/core/src/codex/rollout_reconstruction_tests.rs",
+    "line": 750,
+    "name": "record_initial_history_resumed_does_not_seed_reference_context_item_after_compaction",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "record_initial_history_resumed_does_not_seed_reference_context_item_after_compaction"
+  },
+  {
+    "file": "codex-rs/core/src/codex/rollout_reconstruction_tests.rs",
+    "line": 774,
+    "name": "reconstruct_history_legacy_compaction_without_replacement_history_does_not_inject_current_initial_context",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "reconstruct_history_legacy_compaction_without_replacement_history_does_not_inject_current_initial_context"
+  },
+  {
+    "file": "codex-rs/core/src/codex/rollout_reconstruction_tests.rs",
+    "line": 801,
+    "name": "reconstruct_history_legacy_compaction_without_replacement_history_clears_later_reference_context_item",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "reconstruct_history_legacy_compaction_without_replacement_history_clears_later_reference_context_item"
+  },
+  {
+    "file": "codex-rs/core/src/codex/rollout_reconstruction_tests.rs",
+    "line": 847,
+    "name": "record_initial_history_resumed_turn_context_after_compaction_reestablishes_reference_context_item",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "record_initial_history_resumed_turn_context_after_compaction_reestablishes_reference_context_item"
+  },
+  {
+    "file": "codex-rs/core/src/codex/rollout_reconstruction_tests.rs",
+    "line": 948,
+    "name": "record_initial_history_resumed_aborted_turn_without_id_clears_active_turn_for_compaction_accounting",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "record_initial_history_resumed_aborted_turn_without_id_clears_active_turn_for_compaction_accounting"
+  },
+  {
+    "file": "codex-rs/core/src/codex/rollout_reconstruction_tests.rs",
+    "line": 1156,
+    "name": "record_initial_history_resumed_trailing_incomplete_turn_compaction_clears_reference_context_item",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "record_initial_history_resumed_trailing_incomplete_turn_compaction_clears_reference_context_item"
+  },
+  {
+    "file": "codex-rs/core/src/codex/rollout_reconstruction_tests.rs",
+    "line": 1300,
+    "name": "record_initial_history_resumed_replaced_incomplete_compacted_turn_clears_reference_context_item",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "record_initial_history_resumed_replaced_incomplete_compacted_turn_clears_reference_context_item"
+  },
+  {
+    "file": "codex-rs/core/src/codex_tests.rs",
+    "line": 901,
+    "name": "reconstruct_history_matches_live_compactions",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "reconstruct_history_matches_live_compactions"
+  },
+  {
+    "file": "codex-rs/core/src/codex_tests.rs",
+    "line": 1569,
+    "name": "thread_rollback_restores_cleared_reference_context_item_after_compaction",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "thread_rollback_restores_cleared_reference_context_item_after_compaction"
+  },
+  {
+    "file": "codex-rs/core/src/codex_tests_guardian.rs",
+    "line": 241,
+    "name": "process_compacted_history_preserves_separate_guardian_developer_message",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "process_compacted_history_preserves_separate_guardian_developer_message"
+  },
+  {
+    "file": "codex-rs/core/src/compact_tests.rs",
+    "line": 125,
+    "name": "build_token_limited_compacted_history_truncates_overlong_user_messages",
+    "attrs": [
+      "#[test]"
+    ],
+    "title": "build_token_limited_compacted_history_truncates_overlong_user_messages"
+  },
+  {
+    "file": "codex-rs/core/src/compact_tests.rs",
+    "line": 167,
+    "name": "build_token_limited_compacted_history_appends_summary_message",
+    "attrs": [
+      "#[test]"
+    ],
+    "title": "build_token_limited_compacted_history_appends_summary_message"
+  },
+  {
+    "file": "codex-rs/core/src/compact_tests.rs",
+    "line": 189,
+    "name": "process_compacted_history_replaces_developer_messages",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "process_compacted_history_replaces_developer_messages"
+  },
+  {
+    "file": "codex-rs/core/src/compact_tests.rs",
+    "line": 237,
+    "name": "process_compacted_history_reinjects_full_initial_context",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "process_compacted_history_reinjects_full_initial_context"
+  },
+  {
+    "file": "codex-rs/core/src/compact_tests.rs",
+    "line": 265,
+    "name": "process_compacted_history_drops_non_user_content_messages",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "process_compacted_history_drops_non_user_content_messages"
+  },
+  {
+    "file": "codex-rs/core/src/compact_tests.rs",
+    "line": 344,
+    "name": "process_compacted_history_inserts_context_before_last_real_user_message_only",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "process_compacted_history_inserts_context_before_last_real_user_message_only"
+  },
+  {
+    "file": "codex-rs/core/src/compact_tests.rs",
+    "line": 414,
+    "name": "process_compacted_history_reinjects_model_switch_message",
+    "attrs": [
+      "#[tokio::test]"
+    ],
+    "title": "process_compacted_history_reinjects_model_switch_message"
+  },
+  {
+    "file": "codex-rs/core/src/compact_tests.rs",
+    "line": 542,
+    "name": "insert_initial_context_before_last_real_user_or_summary_keeps_compaction_last",
+    "attrs": [
+      "#[test]"
+    ],
+    "title": "insert_initial_context_before_last_real_user_or_summary_keeps_compaction_last"
+  },
+  {
+    "file": "codex-rs/core/src/config/config_tests.rs",
+    "line": 3114,
+    "name": "cli_override_sets_compact_prompt",
+    "attrs": [
+      "#[test]"
+    ],
+    "title": "cli_override_sets_compact_prompt"
+  },
+  {
+    "file": "codex-rs/core/src/config/config_tests.rs",
+    "line": 3136,
+    "name": "loads_compact_prompt_from_file",
+    "attrs": [
+      "#[test]"
+    ],
+    "title": "loads_compact_prompt_from_file"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 412,
+    "name": "manual_compact_uses_custom_prompt",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "manual_compact_uses_custom_prompt"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 503,
+    "name": "manual_compact_emits_api_and_local_token_usage_events",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "manual_compact_emits_api_and_local_token_usage_events"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 561,
+    "name": "manual_compact_emits_context_compaction_items",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "manual_compact_emits_context_compaction_items"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 635,
+    "name": "multiple_auto_compact_per_task_runs_after_token_limit_hit",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "multiple_auto_compact_per_task_runs_after_token_limit_hit"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 1578,
+    "name": "auto_compact_runs_after_resume_when_token_usage_is_over_limit",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "auto_compact_runs_after_resume_when_token_usage_is_over_limit"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 1698,
+    "name": "pre_sampling_compact_runs_on_switch_to_smaller_context_model",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "pre_sampling_compact_runs_on_switch_to_smaller_context_model"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 1824,
+    "name": "pre_sampling_compact_runs_after_resume_and_switch_to_smaller_model",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "pre_sampling_compact_runs_after_resume_and_switch_to_smaller_model"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 1969,
+    "name": "auto_compact_persists_rollout_entries",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "auto_compact_persists_rollout_entries"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 2105,
+    "name": "manual_compact_retries_after_context_window_error",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "manual_compact_retries_after_context_window_error"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 2291,
+    "name": "manual_compact_twice_preserves_latest_user_messages",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "manual_compact_twice_preserves_latest_user_messages"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 2490,
+    "name": "auto_compact_allows_multiple_attempts_when_interleaved_with_other_turn_events",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "auto_compact_allows_multiple_attempts_when_interleaved_with_other_turn_events"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 2601,
+    "name": "snapshot_request_shape_mid_turn_continuation_compaction",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "snapshot_request_shape_mid_turn_continuation_compaction"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 2705,
+    "name": "auto_compact_clamps_config_limit_to_context_window",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "auto_compact_clamps_config_limit_to_context_window"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 2765,
+    "name": "auto_compact_counts_encrypted_reasoning_before_last_user",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "auto_compact_counts_encrypted_reasoning_before_last_user"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 2891,
+    "name": "auto_compact_runs_when_reasoning_header_clears_between_turns",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "auto_compact_runs_when_reasoning_header_clears_between_turns"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 3222,
+    "name": "snapshot_request_shape_pre_turn_compaction_context_window_exceeded",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "snapshot_request_shape_pre_turn_compaction_context_window_exceeded"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact.rs",
+    "line": 3309,
+    "name": "snapshot_request_shape_manual_compact_without_previous_user_messages",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "snapshot_request_shape_manual_compact_without_previous_user_messages"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 197,
+    "name": "remote_compact_replaces_history_for_followups",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "remote_compact_replaces_history_for_followups"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 342,
+    "name": "remote_compact_runs_automatically",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "remote_compact_runs_automatically"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 409,
+    "name": "remote_compact_trims_function_call_history_to_fit_context_window",
+    "attrs": [
+      "#[cfg_attr(target_os = \"windows\", ignore)]",
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "remote_compact_trims_function_call_history_to_fit_context_window"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 526,
+    "name": "auto_remote_compact_trims_function_call_history_to_fit_context_window",
+    "attrs": [
+      "#[cfg_attr(target_os = \"windows\", ignore)]",
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "auto_remote_compact_trims_function_call_history_to_fit_context_window"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 664,
+    "name": "auto_remote_compact_failure_stops_agent_loop",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "auto_remote_compact_failure_stops_agent_loop"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 758,
+    "name": "remote_compact_trim_estimate_uses_session_base_instructions",
+    "attrs": [
+      "#[cfg_attr(target_os = \"windows\", ignore)]",
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "remote_compact_trim_estimate_uses_session_base_instructions"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 959,
+    "name": "remote_manual_compact_emits_context_compaction_items",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "remote_manual_compact_emits_context_compaction_items"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 1037,
+    "name": "remote_manual_compact_failure_emits_task_error_event",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "remote_manual_compact_failure_emits_task_error_event"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 1228,
+    "name": "remote_compact_and_resume_refresh_stale_developer_instructions",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "remote_compact_and_resume_refresh_stale_developer_instructions"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 1371,
+    "name": "remote_compact_refreshes_stale_developer_instructions_without_resume",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "remote_compact_refreshes_stale_developer_instructions_without_resume"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 1462,
+    "name": "snapshot_request_shape_remote_pre_turn_compaction_restates_realtime_start",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "snapshot_request_shape_remote_pre_turn_compaction_restates_realtime_start"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 1595,
+    "name": "snapshot_request_shape_remote_pre_turn_compaction_restates_realtime_end",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "snapshot_request_shape_remote_pre_turn_compaction_restates_realtime_end"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 1682,
+    "name": "snapshot_request_shape_remote_manual_compact_restates_realtime_start",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "snapshot_request_shape_remote_manual_compact_restates_realtime_start"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 1769,
+    "name": "snapshot_request_shape_remote_mid_turn_compaction_does_not_restate_realtime_end",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "snapshot_request_shape_remote_mid_turn_compaction_does_not_restate_realtime_end"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 1870,
+    "name": "snapshot_request_shape_remote_compact_resume_restates_realtime_end",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "snapshot_request_shape_remote_compact_resume_restates_realtime_end"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 2076,
+    "name": "snapshot_request_shape_remote_pre_turn_compaction_strips_incoming_model_switch",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "snapshot_request_shape_remote_pre_turn_compaction_strips_incoming_model_switch"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 2316,
+    "name": "snapshot_request_shape_remote_mid_turn_continuation_compaction",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "snapshot_request_shape_remote_mid_turn_continuation_compaction"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 2385,
+    "name": "snapshot_request_shape_remote_mid_turn_compaction_summary_only_reinjects_context",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "snapshot_request_shape_remote_mid_turn_compaction_summary_only_reinjects_context"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 2468,
+    "name": "snapshot_request_shape_remote_mid_turn_compaction_multi_summary_reinjects_above_last_summary",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "snapshot_request_shape_remote_mid_turn_compaction_multi_summary_reinjects_above_last_summary"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/compact_remote.rs",
+    "line": 2575,
+    "name": "snapshot_request_shape_remote_manual_compact_without_previous_user_messages",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "snapshot_request_shape_remote_manual_compact_without_previous_user_messages"
+  },
+  {
+    "file": "codex-rs/core/tests/suite/window_headers.rs",
+    "line": 24,
+    "name": "window_id_advances_after_compact_persists_on_resume_and_resets_on_fork",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "window_id_advances_after_compact_persists_on_resume_and_resets_on_fork"
+  },
+  {
+    "file": "codex-rs/app-server/tests/suite/v2/compaction.rs",
+    "line": 47,
+    "name": "auto_compaction_local_emits_started_and_completed_items",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "auto_compaction_local_emits_started_and_completed_items"
+  },
+  {
+    "file": "codex-rs/app-server/tests/suite/v2/compaction.rs",
+    "line": 106,
+    "name": "auto_compaction_remote_emits_started_and_completed_items",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "auto_compaction_remote_emits_started_and_completed_items"
+  },
+  {
+    "file": "codex-rs/app-server/tests/suite/v2/compaction.rs",
+    "line": 194,
+    "name": "thread_compact_start_triggers_compaction_and_returns_empty_response",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "thread_compact_start_triggers_compaction_and_returns_empty_response"
+  },
+  {
+    "file": "codex-rs/app-server/tests/suite/v2/compaction.rs",
+    "line": 250,
+    "name": "thread_compact_start_rejects_invalid_thread_id",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "thread_compact_start_rejects_invalid_thread_id"
+  },
+  {
+    "file": "codex-rs/app-server/tests/suite/v2/compaction.rs",
+    "line": 286,
+    "name": "thread_compact_start_rejects_unknown_thread_id",
+    "attrs": [
+      "#[tokio::test(flavor = \"multi_thread\", worker_threads = 2)]"
+    ],
+    "title": "thread_compact_start_rejects_unknown_thread_id"
+  }
+]

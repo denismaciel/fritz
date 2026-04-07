@@ -1,0 +1,10 @@
+bin/
+dist/
+coverage.out
+.env
+.fritz/
+**/.fritz/
+fritz-bash-*
+__pycache__/
+*.pyc
+fritz

@@ -1,0 +1,16 @@
+{
+  "root": "/tmp/openai-codex",
+  "source_rs": "/tmp/openai-codex/codex-rs/core/src/compact.rs",
+  "prompts": {
+    "SUMMARIZATION_PROMPT": {
+      "output_file": "compact_prompt.md",
+      "source_file": "/tmp/openai-codex/codex-rs/core/templates/compact/prompt.md",
+      "source_kind": "include_str"
+    },
+    "SUMMARY_PREFIX": {
+      "output_file": "summary_prefix.md",
+      "source_file": "/tmp/openai-codex/codex-rs/core/templates/compact/summary_prefix.md",
+      "source_kind": "include_str"
+    }
+  }
+}

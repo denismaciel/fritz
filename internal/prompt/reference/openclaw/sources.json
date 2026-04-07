@@ -1,0 +1,10 @@
+{
+  "heartbeat_prompt_source": "/home/denis/tmp/openclaw-EUwHTl/src/auto-reply/heartbeat.ts",
+  "markdown_sources": [
+    "/home/denis/tmp/openclaw-EUwHTl/docs/reference/templates/AGENTS.md",
+    "/home/denis/tmp/openclaw-EUwHTl/docs/reference/AGENTS.default.md",
+    "/home/denis/tmp/openclaw-EUwHTl/docs/concepts/system-prompt.md"
+  ],
+  "memory_section_count": 2,
+  "heartbeat_section_count": 1
+}
