@@ -30,6 +30,24 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+	for _, name := range []string{
+		"FRITZ_PROVIDER",
+		"FRITZ_MODEL",
+		"GEMINI_API_KEY",
+		"FRITZ_GEMINI_ENDPOINT",
+		"FRITZ_OPENAI_CODEX_ENDPOINT",
+		"FRITZ_OPENAI_CODEX_AUTH_BASE_URL",
+		"FRITZ_OPENAI_CODEX_CLIENT_ID",
+		"FRITZ_OPENAI_CODEX_ORIGINATOR",
+		"FRITZ_OPENAI_CODEX_REDIRECT_URL",
+		"TELEGRAM_BOT_TOKEN",
+		"FRITZ_TELEGRAM_PAIRING_TOKEN",
+		"FRITZ_TELEGRAM_ALLOWED_USERS",
+	} {
+		_ = os.Unsetenv(name)
+	}
+	_ = os.Setenv("HOME", dir)
+	_ = os.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config"))
 	_ = os.Setenv("FRITZ_LOG_FILE", filepath.Join(dir, "agent.jsonl"))
 	_ = os.Setenv("FRITZ_LOG_LEVEL", "debug")
 	code := m.Run()

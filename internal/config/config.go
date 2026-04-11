@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,7 +15,8 @@ import (
 
 const (
 	DefaultProvider               = provider.Gemini
-	DefaultModelID                = "gpt-5.4-high-reasoning"
+	DefaultGeminiModelID          = "gemini-3-flash-preview"
+	DefaultOpenAICodexModelID     = "gpt-5.4-high-reasoning"
 	DefaultGeminiEndpoint         = "https://generativelanguage.googleapis.com"
 	DefaultOpenAICodexEndpoint    = "https://chatgpt.com/backend-api"
 	DefaultOpenAICodexAuthBaseURL = "https://auth.openai.com"
@@ -169,10 +171,21 @@ func GlobalConfigPath() string {
 	return filepath.Join(home, ".config", "fritz", "config.json")
 }
 
+func DefaultModelIDForProvider(kind provider.Kind) string {
+	switch kind {
+	case provider.OpenAICodex:
+		return DefaultOpenAICodexModelID
+	case provider.Gemini:
+		fallthrough
+	default:
+		return DefaultGeminiModelID
+	}
+}
+
 func DefaultSource() Source {
 	return Source{
 		Provider:               string(DefaultProvider),
-		ModelID:                DefaultModelID,
+		ModelID:                DefaultModelIDForProvider(DefaultProvider),
 		GeminiEndpoint:         DefaultGeminiEndpoint,
 		OpenAICodexEndpoint:    DefaultOpenAICodexEndpoint,
 		OpenAICodexAuthBaseURL: DefaultOpenAICodexAuthBaseURL,
@@ -307,6 +320,15 @@ func Resolve(s Sources) Runtime {
 	if err != nil {
 		providerKind = provider.Kind(strings.TrimSpace(providerValue))
 	}
+	modelID := firstNonEmpty(
+		s.Flags.ModelID,
+		s.Env.ModelID,
+		s.File.ModelID,
+		s.GlobalFile.ModelID,
+	)
+	if modelID == "" {
+		modelID = DefaultModelIDForProvider(providerKind)
+	}
 	return Runtime{
 		Provider: providerKind,
 		GeminiAPIKey: firstNonEmpty(
@@ -316,13 +338,7 @@ func Resolve(s Sources) Runtime {
 			s.GlobalFile.GeminiAPIKey,
 			s.Defaults.GeminiAPIKey,
 		),
-		ModelID: firstNonEmpty(
-			s.Flags.ModelID,
-			s.Env.ModelID,
-			s.File.ModelID,
-			s.GlobalFile.ModelID,
-			s.Defaults.ModelID,
-		),
+		ModelID: modelID,
 		GeminiEndpoint: firstNonEmpty(
 			s.Flags.GeminiEndpoint,
 			s.Env.GeminiEndpoint,
@@ -524,6 +540,9 @@ func (c Runtime) Validate() error {
 	if _, err := provider.Parse(string(c.Provider)); err != nil {
 		return err
 	}
+	if err := validateModelForProvider(c.Provider, c.ModelID); err != nil {
+		return err
+	}
 	switch c.Provider {
 	case provider.Gemini:
 		if !c.HasGeminiAPIKey() {
@@ -531,6 +550,25 @@ func (c Runtime) Validate() error {
 		}
 	case provider.OpenAICodex:
 		return nil
+	}
+	return nil
+}
+
+func validateModelForProvider(kind provider.Kind, modelID string) error {
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		return nil
+	}
+	lower := strings.ToLower(modelID)
+	switch kind {
+	case provider.Gemini:
+		if strings.HasPrefix(lower, "gpt-") {
+			return fmt.Errorf("model %q is not valid for provider %q", modelID, kind)
+		}
+	case provider.OpenAICodex:
+		if strings.HasPrefix(lower, "gemini-") {
+			return fmt.Errorf("model %q is not valid for provider %q", modelID, kind)
+		}
 	}
 	return nil
 }

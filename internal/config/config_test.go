@@ -148,6 +148,23 @@ func TestRuntimeValidate(t *testing.T) {
 	}
 }
 
+func TestResolveDefaultsModelForProvider(t *testing.T) {
+	gemini := Resolve(Sources{Defaults: DefaultSource()})
+	if gemini.ModelID != DefaultGeminiModelID {
+		t.Fatalf("gemini ModelID = %q", gemini.ModelID)
+	}
+
+	openai := Resolve(Sources{
+		Defaults: DefaultSource(),
+		Flags: Source{
+			Provider: "openai-codex",
+		},
+	})
+	if openai.ModelID != DefaultOpenAICodexModelID {
+		t.Fatalf("openai ModelID = %q", openai.ModelID)
+	}
+}
+
 func TestRuntimeValidateOpenAICodexDoesNotRequireGeminiKey(t *testing.T) {
 	runtime := Resolve(Sources{
 		Defaults: DefaultSource(),
@@ -157,6 +174,35 @@ func TestRuntimeValidateOpenAICodexDoesNotRequireGeminiKey(t *testing.T) {
 	})
 	if err := runtime.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestRuntimeValidateRejectsOpenAIModelOnGemini(t *testing.T) {
+	runtime := Resolve(Sources{
+		Defaults: DefaultSource(),
+		Env: Source{
+			GeminiAPIKey: "env-key",
+		},
+		Flags: Source{
+			Provider: "gemini",
+			ModelID:  "gpt-5.4-high-reasoning",
+		},
+	})
+	if err := runtime.Validate(); err == nil {
+		t.Fatal("expected provider/model mismatch error")
+	}
+}
+
+func TestRuntimeValidateRejectsGeminiModelOnOpenAI(t *testing.T) {
+	runtime := Resolve(Sources{
+		Defaults: DefaultSource(),
+		Flags: Source{
+			Provider: "openai-codex",
+			ModelID:  "gemini-3-flash-preview",
+		},
+	})
+	if err := runtime.Validate(); err == nil {
+		t.Fatal("expected provider/model mismatch error")
 	}
 }
 
