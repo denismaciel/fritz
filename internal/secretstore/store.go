@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"sort"
 	"time"
+
+	"fritz/internal/config"
 )
 
 const CurrentVersion = 1
@@ -47,10 +49,10 @@ type Store struct {
 }
 
 func ResolvePaths(cwd string) Paths {
-	root := filepath.Join(cwd, ".fritz")
+	root := config.WorkspaceStateRoot(cwd)
 	return Paths{
 		Root: root,
-		File: filepath.Join(root, "secrets.json"),
+		File: config.DefaultWorkspaceSecretsFile(cwd),
 	}
 }
 

@@ -2,6 +2,7 @@ package ingress
 
 import (
 	"path/filepath"
+	"strings"
 
 	"fritz/internal/config"
 )
@@ -35,10 +36,13 @@ type StatePaths struct {
 
 func ResolveStatePaths(cwd string, cfg config.Runtime) StatePaths {
 	sessionDir := cfg.Session.Dir
-	if !filepath.IsAbs(sessionDir) {
-		sessionDir = filepath.Join(cwd, sessionDir)
+	root := config.DefaultWorkspaceGatewayRoot(cwd)
+	if strings.TrimSpace(sessionDir) != "" {
+		if !filepath.IsAbs(sessionDir) {
+			sessionDir = filepath.Join(cwd, sessionDir)
+		}
+		root = filepath.Join(filepath.Dir(filepath.Clean(sessionDir)), "gateway")
 	}
-	root := filepath.Join(filepath.Dir(filepath.Clean(sessionDir)), "gateway")
 	routingDir := filepath.Join(root, "routing")
 	telegramDir := filepath.Join(root, "telegram")
 	bindingsDir := filepath.Join(root, "bindings")

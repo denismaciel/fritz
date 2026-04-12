@@ -5,15 +5,18 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"fritz/internal/config"
 )
 
 func TestResolvePaths(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
 	paths := ResolvePaths(dir)
-	if paths.Root != filepath.Join(dir, ".fritz") {
+	if paths.Root != config.WorkspaceStateRoot(dir) {
 		t.Fatalf("Root = %q", paths.Root)
 	}
-	if paths.File != filepath.Join(dir, ".fritz", "secrets.json") {
+	if paths.File != config.DefaultWorkspaceSecretsFile(dir) {
 		t.Fatalf("File = %q", paths.File)
 	}
 }

@@ -69,11 +69,12 @@ func TestFileStorePutAPIKeyAndList(t *testing.T) {
 }
 
 func TestFileStoreResolvePaths(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "/tmp/state")
 	paths := ResolvePaths("/tmp/work")
-	if paths.File != filepath.Join("/tmp/work", ".fritz", "auth.json") {
+	if paths.File != filepath.Join("/tmp/state", "fritz", "workspaces", "--tmp--work", "auth.json") {
 		t.Fatalf("File = %q", paths.File)
 	}
-	if paths.LockFile != filepath.Join("/tmp/work", ".fritz", "auth.lock") {
+	if paths.LockFile != filepath.Join("/tmp/state", "fritz", "workspaces", "--tmp--work", "auth.lock") {
 		t.Fatalf("LockFile = %q", paths.LockFile)
 	}
 }

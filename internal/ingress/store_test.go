@@ -12,27 +12,24 @@ import (
 
 func TestResolveStatePaths(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
 	cfg := config.Resolve(config.Sources{
-		Defaults: config.Source{
-			Session: config.SessionConfigSource{
-				Dir: filepath.Join(dir, ".fritz", "sessions"),
-			},
-		},
+		Defaults: config.DefaultSource(),
 	})
 	paths := ResolveStatePaths(dir, cfg)
-	if paths.Root != filepath.Join(dir, ".fritz", "gateway") {
+	if paths.Root != config.DefaultWorkspaceGatewayRoot(dir) {
 		t.Fatalf("Root = %q", paths.Root)
 	}
-	if paths.RoutingSessionMapPath != filepath.Join(dir, ".fritz", "gateway", "routing", "session-map.json") {
+	if paths.RoutingSessionMapPath != filepath.Join(config.DefaultWorkspaceGatewayRoot(dir), "routing", "session-map.json") {
 		t.Fatalf("RoutingSessionMapPath = %q", paths.RoutingSessionMapPath)
 	}
-	if paths.TelegramAllowlistPath != filepath.Join(dir, ".fritz", "gateway", "telegram", "allowlist.json") {
+	if paths.TelegramAllowlistPath != filepath.Join(config.DefaultWorkspaceGatewayRoot(dir), "telegram", "allowlist.json") {
 		t.Fatalf("TelegramAllowlistPath = %q", paths.TelegramAllowlistPath)
 	}
-	if paths.BindingsCurrentPath != filepath.Join(dir, ".fritz", "gateway", "bindings", "current.json") {
+	if paths.BindingsCurrentPath != filepath.Join(config.DefaultWorkspaceGatewayRoot(dir), "bindings", "current.json") {
 		t.Fatalf("BindingsCurrentPath = %q", paths.BindingsCurrentPath)
 	}
-	if paths.HeartbeatStatePath != filepath.Join(dir, ".fritz", "gateway", "heartbeat", "state.json") {
+	if paths.HeartbeatStatePath != filepath.Join(config.DefaultWorkspaceGatewayRoot(dir), "heartbeat", "state.json") {
 		t.Fatalf("HeartbeatStatePath = %q", paths.HeartbeatStatePath)
 	}
 }
@@ -70,6 +67,7 @@ func TestWriteJSONFileAtomicAndReadJSONFile(t *testing.T) {
 
 func TestEnsureLayoutWritesMetaAndBindings(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
 	cfg := config.Resolve(config.Sources{
 		Defaults: config.Source{
 			Session: config.SessionConfigSource{
@@ -95,5 +93,20 @@ func TestEnsureLayoutWritesMetaAndBindings(t *testing.T) {
 	}
 	if !exists || bindings.Version != CurrentStoreVersion || len(bindings.Bindings) != 0 {
 		t.Fatalf("bindings = %#v", bindings)
+	}
+}
+
+func TestResolveStatePathsUsesCustomSessionDirRoot(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Resolve(config.Sources{
+		Defaults: config.Source{
+			Session: config.SessionConfigSource{
+				Dir: filepath.Join(dir, ".fritz", "sessions"),
+			},
+		},
+	})
+	paths := ResolveStatePaths(dir, cfg)
+	if paths.Root != filepath.Join(dir, ".fritz", "gateway") {
+		t.Fatalf("Root = %q", paths.Root)
 	}
 }

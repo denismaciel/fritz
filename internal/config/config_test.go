@@ -218,6 +218,27 @@ func TestRuntimeValidateRejectsUnknownProvider(t *testing.T) {
 	}
 }
 
+func TestResolveStateHelpers(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "/tmp/state")
+	cwd := "/tmp/work"
+	if got := GlobalStateRoot(); got != "/tmp/state/fritz" {
+		t.Fatalf("GlobalStateRoot() = %q", got)
+	}
+	if got := WorkspaceStateRoot(cwd); got != "/tmp/state/fritz/workspaces/--tmp--work" {
+		t.Fatalf("WorkspaceStateRoot() = %q", got)
+	}
+	if got := ResolveLogFile(cwd, ""); got != "/tmp/state/fritz/workspaces/--tmp--work/logs/agent.jsonl" {
+		t.Fatalf("ResolveLogFile() = %q", got)
+	}
+	dir, err := ResolveSessionDir(cwd, "")
+	if err != nil {
+		t.Fatalf("ResolveSessionDir() error = %v", err)
+	}
+	if dir != "/tmp/state/fritz/workspaces/--tmp--work/sessions" {
+		t.Fatalf("ResolveSessionDir() = %q", dir)
+	}
+}
+
 func TestRuntimeValidateTelegram(t *testing.T) {
 	runtime := Resolve(Sources{Defaults: DefaultSource()})
 	if err := runtime.ValidateTelegram(); err == nil {

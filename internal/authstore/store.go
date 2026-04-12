@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"fritz/internal/config"
 	"fritz/internal/provider"
 )
 
@@ -88,11 +89,11 @@ func GlobalAuthLockPath() string {
 }
 
 func ResolvePaths(cwd string) Paths {
-	root := filepath.Join(cwd, ".fritz")
+	root := config.WorkspaceStateRoot(cwd)
 	return Paths{
 		Root:     root,
-		File:     filepath.Join(root, "auth.json"),
-		LockFile: filepath.Join(root, "auth.lock"),
+		File:     config.DefaultWorkspaceAuthFile(cwd),
+		LockFile: config.DefaultWorkspaceAuthLockFile(cwd),
 	}
 }
 

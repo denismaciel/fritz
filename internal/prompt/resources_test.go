@@ -14,6 +14,7 @@ import (
 func TestDiscoverOrdersContextFilesAndPromptFiles(t *testing.T) {
 	home := t.TempDir()
 	cwd := filepath.Join(t.TempDir(), "repo", "nested")
+	t.Setenv("XDG_CONFIG_HOME", "")
 	if err := os.MkdirAll(cwd, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
@@ -51,7 +52,7 @@ func TestDiscoverOrdersContextFilesAndPromptFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cfgDir, "APPEND_SYSTEM.md"), []byte("append file"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(home, ".fritz", "skills"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".config", "fritz", "skills"), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(cwd, ".agents", "skills"), 0o755); err != nil {
@@ -83,6 +84,12 @@ func TestDiscoverOrdersContextFilesAndPromptFiles(t *testing.T) {
 	if len(resources.SkillRoots) != 2 {
 		t.Fatalf("SkillRoots = %#v", resources.SkillRoots)
 	}
+	if resources.SkillRoots[0] != filepath.Join(home, ".config", "fritz", "skills") {
+		t.Fatalf("SkillRoots = %#v", resources.SkillRoots)
+	}
+	if resources.SkillRoots[1] != filepath.Join(cwd, ".agents", "skills") {
+		t.Fatalf("SkillRoots = %#v", resources.SkillRoots)
+	}
 
 	codingResources, err := DiscoverForProfile(DiscoverOptions{Cwd: cwd, HomeDir: home}, ProfileCoding)
 	if err != nil {
@@ -93,6 +100,33 @@ func TestDiscoverOrdersContextFilesAndPromptFiles(t *testing.T) {
 	}
 	if len(codingResources.HeartbeatFiles) != 0 {
 		t.Fatalf("coding HeartbeatFiles = %#v", codingResources.HeartbeatFiles)
+	}
+}
+
+func TestDiscoverUsesXDGGlobalSkillRoot(t *testing.T) {
+	home := t.TempDir()
+	xdg := filepath.Join(t.TempDir(), "xdg")
+	cwd := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	if err := os.MkdirAll(filepath.Join(xdg, "fritz", "skills"), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".config", "fritz", "skills"), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".agents", "skills"), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+
+	resources, err := Discover(DiscoverOptions{Cwd: cwd, HomeDir: home})
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+	if len(resources.SkillRoots) != 1 {
+		t.Fatalf("SkillRoots = %#v", resources.SkillRoots)
+	}
+	if resources.SkillRoots[0] != filepath.Join(xdg, "fritz", "skills") {
+		t.Fatalf("SkillRoots = %#v", resources.SkillRoots)
 	}
 }
 

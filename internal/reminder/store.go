@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"fritz/internal/config"
 )
 
 const CurrentVersion = 1
@@ -38,7 +40,7 @@ type Store struct {
 }
 
 func NewStore(cwd string) *Store {
-	return &Store{path: filepath.Join(cwd, ".fritz", "gateway", "reminders", "reminders.json")}
+	return &Store{path: filepath.Join(config.DefaultWorkspaceGatewayRoot(cwd), "reminders", "reminders.json")}
 }
 
 func NewStoreAt(path string) *Store {

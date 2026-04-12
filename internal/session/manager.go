@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"fritz/internal/chat"
+	"fritz/internal/config"
 	"fritz/internal/model"
 	"fritz/internal/prompt"
 )
@@ -230,11 +231,14 @@ func List(cwd string, sessionRoot string) ([]SessionInfo, error) {
 }
 
 func ListAll(cwd string, sessionRoot string) ([]SessionInfo, error) {
-	dir, err := resolveSessionDir(cwd, sessionRoot)
-	if err != nil {
-		return nil, err
+	base := config.WorkspacesStateRoot()
+	if strings.TrimSpace(sessionRoot) != "" {
+		dir, err := resolveSessionDir(cwd, sessionRoot)
+		if err != nil {
+			return nil, err
+		}
+		base = filepath.Dir(dir)
 	}
-	base := filepath.Dir(dir)
 	entries, err := os.ReadDir(base)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -698,21 +702,11 @@ func transcriptFromMessages(messages []model.Message) chat.Transcript {
 }
 
 func resolveSessionDir(cwd string, sessionRoot string) (string, error) {
-	if sessionRoot == "" {
-		return "", errors.New("empty session dir")
-	}
-	base := sessionRoot
-	if !filepath.IsAbs(base) {
-		base = filepath.Join(cwd, base)
-	}
-	return filepath.Join(base, encodePath(cwd)), nil
+	return config.ResolveSessionDir(cwd, sessionRoot)
 }
 
 func encodePath(cwd string) string {
-	clean := filepath.Clean(cwd)
-	clean = filepath.ToSlash(clean)
-	clean = strings.ReplaceAll(clean, ":", "")
-	return strings.ReplaceAll(clean, "/", "--")
+	return config.WorkspaceKey(cwd)
 }
 
 func maybeString(value string) *string {

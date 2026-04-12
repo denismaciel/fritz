@@ -129,9 +129,10 @@ func TestGatewayPersistsSessionMapAcrossInstances(t *testing.T) {
 
 func TestGatewayStateRootUsesCodingAgentDir(t *testing.T) {
 	dir := t.TempDir()
-	gw := New(dir, testConfig(dir), testService(dir))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
+	gw := New(dir, config.Resolve(config.Sources{Defaults: config.DefaultSource()}), testService(dir))
 
-	want := filepath.Join(dir, ".fritz", "gateway")
+	want := config.DefaultWorkspaceGatewayRoot(dir)
 	if got := gw.StateRoot(); got != want {
 		t.Fatalf("StateRoot() = %q, want %q", got, want)
 	}

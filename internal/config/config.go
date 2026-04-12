@@ -25,14 +25,14 @@ const (
 	DefaultOpenAICodexRedirectURL = "http://localhost:1455/auth/callback"
 	DefaultTelegramEndpoint       = "https://api.telegram.org"
 	DefaultConfigPath             = ".fritz/config.json"
-	DefaultSessionDir             = ".fritz/sessions"
+	DefaultSessionDir             = ""
 	DefaultCompactThresholdTurns  = 20
 	DefaultCompactKeepTurns       = 8
 	DefaultCompactThresholdTokens = 12000
 	DefaultCompactTargetTokens    = 6000
 	DefaultCommandTimeout         = 30 * time.Second
 	DefaultTelegramPollTimeout    = 20 * time.Second
-	DefaultLogFile                = ".fritz/logs/agent.jsonl"
+	DefaultLogFile                = ""
 	DefaultLogLevel               = "info"
 )
 

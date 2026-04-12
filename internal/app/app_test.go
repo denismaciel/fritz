@@ -22,6 +22,7 @@ import (
 	"fritz/internal/openaicodex"
 	"fritz/internal/prompt"
 	"fritz/internal/provider"
+	"fritz/internal/secretstore"
 	"fritz/internal/tool"
 )
 
@@ -48,6 +49,7 @@ func TestMain(m *testing.M) {
 	}
 	_ = os.Setenv("HOME", dir)
 	_ = os.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config"))
+	_ = os.Setenv("XDG_STATE_HOME", filepath.Join(dir, ".state"))
 	_ = os.Setenv("FRITZ_LOG_FILE", filepath.Join(dir, "agent.jsonl"))
 	_ = os.Setenv("FRITZ_LOG_LEVEL", "debug")
 	code := m.Run()
@@ -68,9 +70,37 @@ func useAuthStore(t *testing.T, store authstore.Store) {
 
 func TestDefaultToolRegistryHasCodingTools(t *testing.T) {
 	defs := defaultToolRegistry().Definitions()
+	if len(defs) != 8 {
+		t.Fatalf("Definitions() = %#v", defs)
+	}
+	for _, name := range []string{"reminder_delete", "reminder_list", "reminder_set", "secret_delete", "secret_list", "secret_set"} {
+		if hasTool(defs, name) {
+			t.Fatalf("Definitions() unexpectedly contains %q: %#v", name, defs)
+		}
+	}
+}
+
+func TestGatewayToolRegistryAddsGatewayTools(t *testing.T) {
+	defs := toolRegistryForProfile(config.Resolve(config.Sources{
+		Defaults: config.DefaultSource(),
+	}), prompt.ProfileGateway).Definitions()
 	if len(defs) != 14 {
 		t.Fatalf("Definitions() = %#v", defs)
 	}
+	for _, name := range []string{"reminder_delete", "reminder_list", "reminder_set", "secret_delete", "secret_list", "secret_set"} {
+		if !hasTool(defs, name) {
+			t.Fatalf("Definitions() missing %q: %#v", name, defs)
+		}
+	}
+}
+
+func hasTool(defs []tool.Definition, name string) bool {
+	for _, def := range defs {
+		if def.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func TestRunHelp(t *testing.T) {
@@ -647,6 +677,7 @@ func TestRunAgentPersistsAndContinuesSession(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "test-key")
 
 	dir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
 	origWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Getwd() error = %v", err)
@@ -666,7 +697,7 @@ func TestRunAgentPersistsAndContinuesSession(t *testing.T) {
 		t.Fatalf("first run() error = %v", err)
 	}
 
-	sessionRoot := filepath.Join(dir, ".fritz", "sessions")
+	sessionRoot := config.DefaultWorkspaceSessionDir(dir)
 	var sessionFiles []string
 	_ = filepath.WalkDir(sessionRoot, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil || d.IsDir() || !strings.HasSuffix(path, ".jsonl") {
@@ -709,6 +740,7 @@ func TestRunAgentBuildsSystemPromptAndExpandsSkill(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "test-key")
 
 	dir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("be terse"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -718,10 +750,11 @@ func TestRunAgentBuildsSystemPromptAndExpandsSkill(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "MEMORY.md"), []byte("persist this fact"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(dir, ".fritz"), 0o755); err != nil {
+	secretPath := secretstore.ResolvePaths(dir).File
+	if err := os.MkdirAll(filepath.Dir(secretPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, ".fritz", "secrets.json"), []byte("{\n  \"version\": 1,\n  \"secrets\": {\n    \"strava.api_key\": {\"value\": \"super-secret\"}\n  }\n}\n"), 0o600); err != nil {
+	if err := os.WriteFile(secretPath, []byte("{\n  \"version\": 1,\n  \"secrets\": {\n    \"strava.api_key\": {\"value\": \"super-secret\"}\n  }\n}\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	skillDir := filepath.Join(dir, ".fritz", "skills", "task-pack-create")

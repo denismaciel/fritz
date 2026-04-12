@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -227,29 +226,39 @@ func runWithProfile(
 }
 
 func defaultToolRegistry() *tool.Registry {
-	return defaultToolRegistryForConfig(config.Resolve(config.Sources{
+	return toolRegistryForProfile(config.Resolve(config.Sources{
 		Defaults: config.DefaultSource(),
-	}))
+	}), prompt.ProfileCoding)
 }
 
-func defaultToolRegistryForConfig(cfg config.Runtime) *tool.Registry {
+func toolRegistryForProfile(cfg config.Runtime, profile prompt.Profile) *tool.Registry {
 	registry := tool.NewRegistry()
 	root := mustGetwd()
+	registerCodingTools(registry, root, cfg)
+	if profile == prompt.ProfileGateway {
+		registerGatewayTools(registry, root)
+	}
+	return registry
+}
+
+func registerCodingTools(registry *tool.Registry, root string, cfg config.Runtime) {
 	registry.Register(tool.NewBashTool(root, tool.WithDefaultTimeout(cfg.CommandTimeout)))
 	registry.Register(tool.NewEditTool(root, 128*1024))
 	registry.Register(tool.NewFindTool(root))
 	registry.Register(tool.NewGrepTool(root))
 	registry.Register(tool.NewLsTool(root))
 	registry.Register(tool.NewReadTool(root, 128*1024))
+	registry.Register(tool.NewWebSearchTool(cfg.GeminiAPIKey, cfg.GeminiEndpoint))
+	registry.Register(tool.NewWriteTool(root))
+}
+
+func registerGatewayTools(registry *tool.Registry, root string) {
 	registry.Register(tool.NewReminderDeleteTool(root))
 	registry.Register(tool.NewReminderListTool(root))
 	registry.Register(tool.NewReminderSetTool(root))
 	registry.Register(tool.NewSecretDeleteTool(root))
 	registry.Register(tool.NewSecretListTool(root))
 	registry.Register(tool.NewSecretSetTool(root))
-	registry.Register(tool.NewWebSearchTool(cfg.GeminiAPIKey, cfg.GeminiEndpoint))
-	registry.Register(tool.NewWriteTool(root))
-	return registry
 }
 
 func mustGetwd() string {
@@ -279,9 +288,13 @@ func resolveRuntimeConfig(cwd string, flags command.ConfigOptions) (config.Runti
 }
 
 func runDoctor(cwd string, out io.Writer, cfg config.Runtime) error {
+	sessionDir, err := config.ResolveSessionDir(cwd, cfg.Session.Dir)
+	if err != nil {
+		return err
+	}
 	fmt.Fprintf(out, "provider: %s\n", cfg.Provider)
 	fmt.Fprintf(out, "endpoint: %s\n", providerEndpoint(cfg))
-	fmt.Fprintf(out, "log_file: %s\n", cfg.Log.File)
+	fmt.Fprintf(out, "log_file: %s\n", config.ResolveLogFile(cwd, cfg.Log.File))
 	fmt.Fprintf(out, "log_level: %s\n", cfg.Log.Level)
 	switch cfg.Provider {
 	case provider.Gemini:
@@ -303,7 +316,7 @@ func runDoctor(cwd string, out io.Writer, cfg config.Runtime) error {
 		fmt.Fprintln(out, "provider_auth: unknown")
 	}
 	fmt.Fprintf(out, "model: %s\n", cfg.ModelID)
-	fmt.Fprintf(out, "session_dir: %s\n", cfg.Session.Dir)
+	fmt.Fprintf(out, "session_dir: %s\n", sessionDir)
 	fmt.Fprintf(out, "skills_disabled: %t\n", cfg.Prompt.NoSkills)
 	return cfg.Validate()
 }
@@ -713,7 +726,7 @@ func newService(cwd string, cfg config.Runtime, newClient func(cfg config.Runtim
 		if registry != nil {
 			return registry
 		}
-		return defaultToolRegistryForConfig(cfg)
+		return toolRegistryForProfile(cfg, profile)
 	}, profile)
 }
 
@@ -726,10 +739,7 @@ func validateProviderAccess(ctx context.Context, cwd string, cfg config.Runtime)
 }
 
 func configureLogger(cwd string, cfg config.Runtime) (func(), error) {
-	path := strings.TrimSpace(cfg.Log.File)
-	if path != "" && !filepath.IsAbs(path) {
-		path = filepath.Join(cwd, path)
-	}
+	path := config.ResolveLogFile(cwd, cfg.Log.File)
 	closeFn, err := logx.Configure(logx.Config{
 		Path:  path,
 		Level: cfg.Log.Level,

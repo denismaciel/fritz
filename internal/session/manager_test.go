@@ -260,6 +260,7 @@ func TestBuildContextUsesLatestCompactionReplacementMessages(t *testing.T) {
 
 func TestRuntimeHost(t *testing.T) {
 	cwd := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", filepath.Join(cwd, "state"))
 	cfg := config.Resolve(config.Sources{Defaults: config.DefaultSource()})
 	runtime, err := Start(context.Background(), cwd, cfg, StartOptions{})
 	if err != nil {

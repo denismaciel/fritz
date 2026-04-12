@@ -121,10 +121,7 @@ func discover(options DiscoverOptions, includeMemory bool, includeHeartbeat bool
 
 	var roots []string
 	if home != "." && home != "" {
-		roots = append(roots,
-			filepath.Join(home, ".fritz", "skills"),
-			filepath.Join(home, ".agents", "skills"),
-		)
+		roots = append(roots, filepath.Join(globalConfigDir(home), "fritz", "skills"))
 	}
 	for _, dir := range walkAncestors(cwd) {
 		roots = append(roots, filepath.Join(dir, ".agents", "skills"))
@@ -132,6 +129,16 @@ func discover(options DiscoverOptions, includeMemory bool, includeHeartbeat bool
 	roots = append(roots, filepath.Join(cwd, ".fritz", "skills"))
 	resources.SkillRoots = dedupeExistingDirs(roots)
 	return resources, nil
+}
+
+func globalConfigDir(home string) string {
+	if path := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); path != "" {
+		return filepath.Clean(path)
+	}
+	if home == "" || home == "." {
+		return ""
+	}
+	return filepath.Join(home, ".config")
 }
 
 func BuildSystemPrompt(options BuildOptions) string {
