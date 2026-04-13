@@ -21,13 +21,14 @@ const (
 )
 
 type Item struct {
-	ID      string
-	Kind    ItemKind
-	Title   string
-	Text    string
-	Preview string
-	Error   string
-	Done    bool
+	ID            string
+	Kind          ItemKind
+	Title         string
+	Text          string
+	Preview       string
+	PreviewIsDiff bool
+	Error         string
+	Done          bool
 }
 
 type State struct {
@@ -40,7 +41,21 @@ func NewState() State {
 }
 
 func (s State) AddUserPrompt(text string) State {
+	return s.AddUserPromptWithImages(text, nil)
+}
+
+func (s State) AddUserPromptWithImages(text string, images []tool.ContentPart) State {
 	next := s.clone()
+	if len(images) > 0 {
+		labels := make([]string, 0, len(images))
+		for i, image := range images {
+			labels = append(labels, fmt.Sprintf("[Image #%d] %s", i+1, image.MIMEType))
+		}
+		if text != "" {
+			text += "\n"
+		}
+		text += strings.Join(labels, "\n")
+	}
 	next.append(Item{
 		ID:   fmt.Sprintf("user-%03d", len(next.Items)+1),
 		Kind: ItemUser,
@@ -87,7 +102,7 @@ func (s State) Apply(event agent.Event) State {
 		item.Title = renderToolTitle(event.ToolCall)
 		if event.ToolResult != nil {
 			item.Text = event.ToolResult.Text()
-			item.Preview = previewToolResult(*event.ToolResult)
+			item.Preview, item.PreviewIsDiff = previewToolResult(*event.ToolResult)
 			if event.ToolResult.IsError {
 				item.Error = event.ToolResult.Text()
 			}
@@ -170,7 +185,13 @@ func renderToolTitle(call *tool.Call) string {
 	}
 	keys := make([]string, 0, len(call.Args))
 	for key := range call.Args {
+		if shouldHideToolArg(call.Name, key) {
+			continue
+		}
 		keys = append(keys, key)
+	}
+	if len(keys) == 0 {
+		return call.Name
 	}
 	sort.Strings(keys)
 	parts := make([]string, 0, len(keys))
@@ -181,17 +202,66 @@ func renderToolTitle(call *tool.Call) string {
 	return fmt.Sprintf("%s %s", call.Name, strings.Join(parts, " "))
 }
 
-func previewToolResult(result tool.Result) string {
+func shouldHideToolArg(toolName string, argName string) bool {
+	switch toolName {
+	case "edit":
+		return argName == "edits"
+	case "write":
+		return argName == "content"
+	default:
+		return false
+	}
+}
+
+func previewToolResult(result tool.Result) (string, bool) {
+	if diff := toolDiffPreview(result); diff != "" {
+		return diff, true
+	}
 	text := strings.TrimSpace(result.Text())
 	if text == "" {
 		if len(result.Parts) > 0 {
-			return fmt.Sprintf("%d part(s)", len(result.Parts))
+			return fmt.Sprintf("%d part(s)", len(result.Parts)), false
 		}
-		return ""
+		return "", false
 	}
 	const maxPreview = 160
 	if len(text) <= maxPreview {
-		return text
+		return text, false
 	}
-	return text[:maxPreview] + "..."
+	return text[:maxPreview] + "...", false
+}
+
+func toolDiffPreview(result tool.Result) string {
+	switch result.Name {
+	case "edit":
+		return extractDiff(result.Details)
+	case "write":
+		return extractDiff(result.Details)
+	default:
+		return ""
+	}
+}
+
+func extractDiff(details any) string {
+	switch details := details.(type) {
+	case tool.EditResultDetails:
+		return strings.TrimSpace(details.Diff)
+	case *tool.EditResultDetails:
+		if details == nil {
+			return ""
+		}
+		return strings.TrimSpace(details.Diff)
+	case tool.WriteResultDetails:
+		return strings.TrimSpace(details.Diff)
+	case *tool.WriteResultDetails:
+		if details == nil {
+			return ""
+		}
+		return strings.TrimSpace(details.Diff)
+	case map[string]any:
+		diff, _ := details["diff"].(string)
+		return strings.TrimSpace(diff)
+	default:
+		return ""
+	}
 }

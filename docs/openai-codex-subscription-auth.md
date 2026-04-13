@@ -13,8 +13,9 @@
 
 ## local state
 
-- auth file: `.fritz/auth.json`
-- lock file: `.fritz/auth.lock`
+- auth file: `$XDG_DATA_HOME/fritz/auth.json`
+- fallback auth file: `~/.local/share/fritz/auth.json`
+- lock file: same path with `.lock` suffix
 
 OAuth tokens are kept out of session/history files.
 

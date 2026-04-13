@@ -70,6 +70,11 @@ type EditResultDetails struct {
 	FirstChangedLine int    `json:"firstChangedLine"`
 }
 
+type WriteResultDetails struct {
+	Diff             string `json:"diff"`
+	FirstChangedLine int    `json:"firstChangedLine"`
+}
+
 type BashResultDetails struct {
 	ExitCode       int    `json:"exitCode"`
 	TimedOut       bool   `json:"timedOut,omitempty"`

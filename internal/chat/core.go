@@ -119,9 +119,13 @@ func StartChat(state State, showHelp bool) Result {
 }
 
 func SubmitPrompt(state State, prompt string) Result {
+	return SubmitPromptWithImages(state, prompt, nil)
+}
+
+func SubmitPromptWithImages(state State, prompt string, images []tool.ContentPart) Result {
 	next := state
 	next.PendingPrompt = prompt
-	next.Messages = append(next.Messages, model.TextMessage(model.UserRole, prompt))
+	next.Messages = append(next.Messages, model.MessageWithImages(model.UserRole, prompt, images))
 	return Result{
 		State: next,
 		Effects: []Effect{

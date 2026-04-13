@@ -59,6 +59,7 @@ type Event struct {
 
 type RunRequest struct {
 	Prompt string
+	Images []tool.ContentPart
 }
 
 type RunResult struct {
@@ -163,6 +164,10 @@ func (r *Runtime) State() chat.State {
 	return r.state
 }
 
+func (r *Runtime) ModelID() string {
+	return r.cfg.ModelID
+}
+
 func (r *Runtime) Reset() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -188,7 +193,7 @@ func (r *Runtime) Submit(ctx context.Context, req RunRequest) (RunHandle, error)
 	}
 
 	r.mu.Lock()
-	initial := chat.SubmitPrompt(r.state, expanded)
+	initial := chat.SubmitPromptWithImages(r.state, expanded, req.Images)
 	r.state = initial.State
 	r.mu.Unlock()
 

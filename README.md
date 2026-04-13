@@ -1,26 +1,26 @@
 # fritz
 
-Small coding agent in Go.
+A small coding agent written in Go.
 
-This repo now builds 2 binaries:
+This repo builds two binaries:
 
-- `fritz`: coding agent cli
-- `fritz-telegram`: Telegram gateway for `fritz`
+- `fritz` — CLI agent
+- `fritz-telegram` — Telegram gateway for `fritz`
 
-## install
+## Quick start
 
 ```sh
 nix run github:denismaciel/fritz -- --help
 nix run github:denismaciel/fritz#fritz-telegram -- --help
 ```
 
-or:
+Or install locally:
 
 ```sh
 make install
 ```
 
-## dev
+## Development
 
 ```sh
 nix develop
@@ -28,7 +28,7 @@ make test
 make build
 ```
 
-## use
+## Usage
 
 ```sh
 fritz --help
@@ -38,6 +38,12 @@ fritz chat
 fritz-telegram --help
 ```
 
-Config comes from `.fritz/config.json`, env, and flags.
+## Config
 
-Infra wiring like NixOS services, Telegram secrets, and host config stays outside this repo.
+Configuration is loaded from, in order:
+
+- `.fritz/config.json`
+- environment variables
+- command-line flags
+
+Infra outside this repo: NixOS services, Telegram secrets, and host-specific config.

@@ -35,7 +35,7 @@
 - added operator doc:
   - `docs/openai-codex-subscription-auth.md`
 - likely new local state path:
-  - `.fritz/auth.json`
+  - `$XDG_DATA_HOME/fritz/auth.json` fallback `~/.local/share/fritz/auth.json`
 - first pass out of scope:
   - websocket transport
   - provider marketplace / dynamic model registry

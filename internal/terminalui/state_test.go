@@ -29,6 +29,19 @@ func TestStateApplyReasoningAndAssistantText(t *testing.T) {
 	}
 }
 
+func TestAddUserPromptWithImages(t *testing.T) {
+	state := NewState()
+	state = state.AddUserPromptWithImages("look", []tool.ContentPart{
+		tool.ImagePart("image/png", "Zm9v"),
+	})
+	if len(state.Items) != 1 {
+		t.Fatalf("Items = %#v", state.Items)
+	}
+	if !strings.Contains(state.Items[0].Text, "[Image #1] image/png") {
+		t.Fatalf("item = %#v", state.Items[0])
+	}
+}
+
 func TestStateApplyToolPreview(t *testing.T) {
 	state := NewState()
 	state = state.Apply(agent.Event{
@@ -54,6 +67,83 @@ func TestStateApplyToolPreview(t *testing.T) {
 	}
 	if len(state.Items[0].Preview) == 0 || len(state.Items[0].Preview) >= 400 {
 		t.Fatalf("preview = %q", state.Items[0].Preview)
+	}
+	if state.Items[0].PreviewIsDiff {
+		t.Fatalf("PreviewIsDiff = true")
+	}
+}
+
+func TestStateApplyEditToolUsesDiffPreview(t *testing.T) {
+	state := NewState()
+	state = state.Apply(agent.Event{
+		Kind:      agent.EventToolCallCompleted,
+		MessageID: "t1",
+		ToolCall:  &tool.Call{Name: "edit", Args: map[string]any{"path": "README.md"}},
+		ToolResult: &tool.Result{
+			Name:    "edit",
+			Parts:   []tool.ContentPart{tool.TextPart("Successfully replaced 1 block(s) in README.md.")},
+			Details: tool.EditResultDetails{Diff: " old\n-before\n+after"},
+		},
+	})
+
+	if got := state.Items[0].Preview; got != "old\n-before\n+after" {
+		t.Fatalf("preview = %q", got)
+	}
+	if !state.Items[0].PreviewIsDiff {
+		t.Fatal("PreviewIsDiff = false")
+	}
+}
+
+func TestStateApplyWriteToolUsesDiffPreview(t *testing.T) {
+	state := NewState()
+	state = state.Apply(agent.Event{
+		Kind:      agent.EventToolCallCompleted,
+		MessageID: "t1",
+		ToolCall:  &tool.Call{Name: "write", Args: map[string]any{"path": "README.md"}},
+		ToolResult: &tool.Result{
+			Name:    "write",
+			Parts:   []tool.ContentPart{tool.TextPart("Successfully wrote 5 bytes to README.md.")},
+			Details: tool.WriteResultDetails{Diff: " new\n+after"},
+		},
+	})
+
+	if got := state.Items[0].Preview; got != "new\n+after" {
+		t.Fatalf("preview = %q", got)
+	}
+	if !state.Items[0].PreviewIsDiff {
+		t.Fatal("PreviewIsDiff = false")
+	}
+}
+
+func TestRenderToolTitleHidesEditEdits(t *testing.T) {
+	title := renderToolTitle(&tool.Call{
+		Name: "edit",
+		Args: map[string]any{
+			"path":  "README.md",
+			"edits": []any{map[string]any{"oldText": "a", "newText": "b"}},
+		},
+	})
+	if strings.Contains(title, "edits=") {
+		t.Fatalf("title = %q", title)
+	}
+	if !strings.Contains(title, "path=") {
+		t.Fatalf("title = %q", title)
+	}
+}
+
+func TestRenderToolTitleHidesWriteContent(t *testing.T) {
+	title := renderToolTitle(&tool.Call{
+		Name: "write",
+		Args: map[string]any{
+			"path":    "README.md",
+			"content": "hello",
+		},
+	})
+	if strings.Contains(title, "content=") {
+		t.Fatalf("title = %q", title)
+	}
+	if !strings.Contains(title, "path=") {
+		t.Fatalf("title = %q", title)
 	}
 }
 

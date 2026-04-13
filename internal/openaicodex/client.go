@@ -154,7 +154,7 @@ func buildRequestBody(req model.Request, modelID string) requestBody {
 		Include:           []string{"reasoning.encrypted_content"},
 		ToolChoice:        "auto",
 		ParallelToolCalls: true,
-		ServiceTier:       "fast",
+		ServiceTier:       "priority",
 	}
 	if len(req.Tools) > 0 {
 		body.Tools = make([]responseTool, 0, len(req.Tools))
@@ -232,6 +232,12 @@ func buildInput(messages []model.Message) []any {
 					userParts = append(userParts, map[string]any{
 						"type": "input_text",
 						"text": part.Text,
+					})
+				case part.ImageData != "" && part.ImageMIMEType != "":
+					userParts = append(userParts, map[string]any{
+						"type":      "input_image",
+						"image_url": "data:" + part.ImageMIMEType + ";base64," + part.ImageData,
+						"detail":    "auto",
 					})
 				}
 			}

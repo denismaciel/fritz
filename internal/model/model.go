@@ -17,6 +17,8 @@ const (
 
 type Part struct {
 	Text             string       `json:"text,omitempty"`
+	ImageData        string       `json:"imageData,omitempty"`
+	ImageMIMEType    string       `json:"imageMimeType,omitempty"`
 	Thought          bool         `json:"thought,omitempty"`
 	ToolCall         *tool.Call   `json:"toolCall,omitempty"`
 	ToolResult       *tool.Result `json:"toolResult,omitempty"`
@@ -35,6 +37,23 @@ func TextMessage(role Role, text string) Message {
 			{Text: text},
 		},
 	}
+}
+
+func MessageWithImages(role Role, text string, images []tool.ContentPart) Message {
+	parts := make([]Part, 0, len(images)+1)
+	if text != "" {
+		parts = append(parts, Part{Text: text})
+	}
+	for _, image := range images {
+		if image.Kind != tool.ImagePartKind || image.Data == "" || image.MIMEType == "" {
+			continue
+		}
+		parts = append(parts, Part{
+			ImageData:     image.Data,
+			ImageMIMEType: image.MIMEType,
+		})
+	}
+	return Message{Role: role, Parts: parts}
 }
 
 func (m Message) Text() string {
@@ -134,6 +153,14 @@ func EstimateMessageTokens(msg Message) int {
 	for _, part := range msg.Parts {
 		if part.Text != "" {
 			total += ApproxTokenCount(part.Text)
+		}
+		if part.ImageData != "" || part.ImageMIMEType != "" {
+			if data, err := json.Marshal(map[string]string{
+				"imageData":     part.ImageData,
+				"imageMimeType": part.ImageMIMEType,
+			}); err == nil {
+				total += ApproxTokenCount(string(data))
+			}
 		}
 		if part.ToolCall != nil {
 			if data, err := json.Marshal(part.ToolCall); err == nil {

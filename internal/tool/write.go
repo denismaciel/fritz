@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 )
 
@@ -65,14 +66,35 @@ func (t writeTool) Run(ctx context.Context, call Call) (Result, error) {
 		return errResult, err
 	}
 
+	var result Result
 	err = withFileMutationQueue(resolved, func() error {
+		before := ""
+		data, readErr := t.ops.ReadFile(resolved)
+		if readErr == nil {
+			before = string(data)
+		} else if !os.IsNotExist(readErr) {
+			return readErr
+		}
 		if err := t.ops.MkdirAll(filepath.Dir(resolved), 0o755); err != nil {
 			return err
 		}
-		return t.ops.WriteFile(resolved, []byte(content), 0o644)
+		if err := t.ops.WriteFile(resolved, []byte(content), 0o644); err != nil {
+			return err
+		}
+		diff, firstChangedLine := GenerateDiffString(before, content)
+		result = Result{
+			CallID: call.ID,
+			Name:   call.Name,
+			Parts:  []ContentPart{TextPart(fmt.Sprintf("Successfully wrote %d bytes to %s.", len(content), rawPath))},
+			Details: WriteResultDetails{
+				Diff:             diff,
+				FirstChangedLine: firstChangedLine,
+			},
+		}
+		return nil
 	})
 	if err != nil {
 		return errorResult(call, err), err
 	}
-	return TextResult(call, fmt.Sprintf("Successfully wrote %d bytes to %s.", len(content), rawPath)), nil
+	return result, nil
 }

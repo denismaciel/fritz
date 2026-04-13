@@ -31,6 +31,13 @@ func TestWriteToolParity(t *testing.T) {
 		if !strings.Contains(result.Text(), "Successfully wrote") {
 			t.Fatalf("content = %q", result.Text())
 		}
+		details, ok := result.Details.(WriteResultDetails)
+		if !ok {
+			t.Fatalf("Details type = %T", result.Details)
+		}
+		if !strings.Contains(details.Diff, "+Test content") {
+			t.Fatalf("diff = %q", details.Diff)
+		}
 	})
 
 	t.Run("should create parent directories", func(t *testing.T) {

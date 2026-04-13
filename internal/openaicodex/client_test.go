@@ -38,6 +38,22 @@ func TestClientSendsCodexHeadersAndBody(t *testing.T) {
 		if body["instructions"] != "sys" {
 			t.Fatalf("instructions = %#v", body["instructions"])
 		}
+		if body["service_tier"] != "priority" {
+			t.Fatalf("service_tier = %#v", body["service_tier"])
+		}
+		input, _ := body["input"].([]any)
+		if len(input) != 1 {
+			t.Fatalf("input = %#v", body["input"])
+		}
+		firstInput, _ := input[0].(map[string]any)
+		content, _ := firstInput["content"].([]any)
+		if len(content) != 2 {
+			t.Fatalf("content = %#v", firstInput["content"])
+		}
+		secondContent, _ := content[1].(map[string]any)
+		if secondContent["type"] != "input_image" {
+			t.Fatalf("content[1] = %#v", secondContent)
+		}
 		tools, _ := body["tools"].([]any)
 		if len(tools) != 1 {
 			t.Fatalf("tools = %#v", body["tools"])
@@ -65,7 +81,9 @@ func TestClientSendsCodexHeadersAndBody(t *testing.T) {
 
 	resp, err := client.Generate(context.Background(), model.Request{
 		SystemPrompt: "sys",
-		Messages:     []model.Message{model.TextMessage(model.UserRole, "hi")},
+		Messages: []model.Message{model.MessageWithImages(model.UserRole, "hi", []tool.ContentPart{
+			tool.ImagePart("image/png", "Zm9v"),
+		})},
 		Tools: []tool.Definition{{
 			Name:        "read",
 			Description: "Read file",

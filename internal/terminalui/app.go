@@ -8,17 +8,23 @@ import (
 
 	"fritz/internal/agent"
 	"fritz/internal/brand"
+	"fritz/internal/tool"
 
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type agentEventMsg struct{ event agent.Event }
 type runDoneMsg struct{ result agent.RunResult }
 type runErrMsg struct{ err error }
+type pasteClipboardResultMsg struct {
+	result clipboardPasteResult
+	err    error
+}
 
 type Model struct {
 	runtime *agent.Runtime
@@ -27,6 +33,7 @@ type Model struct {
 	state       State
 	viewport    viewport.Model
 	input       textarea.Model
+	pendingImgs []tool.ContentPart
 	width       int
 	height      int
 	activeRunID string
@@ -34,7 +41,7 @@ type Model struct {
 
 func NewModel(runtime *agent.Runtime) Model {
 	input := textarea.New()
-	input.Placeholder = "Type a prompt. Enter send. Esc cancel. Ctrl+C quit."
+	input.Placeholder = "Type a prompt."
 	input.Focus()
 	input.CharLimit = 0
 	input.ShowLineNumbers = false
@@ -87,6 +94,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "ctrl+v":
+			if m.activeRunID != "" {
+				return m, nil
+			}
+			return m, func() tea.Msg {
+				result, err := readWaylandClipboard()
+				return pasteClipboardResultMsg{result: result, err: err}
+			}
 		case "esc":
 			if m.activeRunID != "" {
 				m.runtime.CancelRun(m.activeRunID)
@@ -106,11 +121,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if text == "" {
 				return m, nil
 			}
-			m.state = m.state.AddUserPrompt(text)
+			m.state = m.state.AddUserPromptWithImages(text, m.pendingImgs)
+			images := append([]tool.ContentPart(nil), m.pendingImgs...)
 			m.input.SetValue("")
+			m.pendingImgs = nil
 			m.resizeInput()
 			m.syncViewport()
-			handle, err := m.runtime.Submit(context.Background(), agent.RunRequest{Prompt: text})
+			handle, err := m.runtime.Submit(context.Background(), agent.RunRequest{Prompt: text, Images: images})
 			if err != nil {
 				return m, sendMsg(runErrMsg{err: err})
 			}
@@ -149,6 +166,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 		m.syncViewport()
 		return m, nil
+	case pasteClipboardResultMsg:
+		if msg.err != nil {
+			m.state = m.state.Apply(agent.Event{
+				ID:    "paste-image-error",
+				Kind:  agent.EventRunFailed,
+				Error: msg.err.Error(),
+			})
+		} else if msg.result.image.Kind == tool.ImagePartKind {
+			m.pendingImgs = append(m.pendingImgs, msg.result.image)
+		} else if msg.result.text != "" {
+			m.input.InsertString(msg.result.text)
+		}
+		m.resizeInput()
+		m.syncViewport()
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -159,16 +191,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	header := lipgloss.NewStyle().Bold(true).Render(brand.CLIName)
-	footerText := "Enter send | Esc cancel/clear | Ctrl+L reset | Ctrl+C quit"
+	footerText := "Model: unknown"
+	if m.runtime != nil {
+		footerText = "Model: " + m.runtime.ModelID()
+	}
 	if m.activeRunID != "" {
-		footerText = "Running... Esc cancel | Ctrl+C quit"
+		footerText += " | Running..."
 	}
 	footer := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(footerText)
 	inputBox := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("8")).
 		Padding(0, 1).
-		Render(m.input.View())
+		Render(renderInputBox(m.input.View(), m.pendingImgs))
 	return lipgloss.JoinVertical(lipgloss.Left,
 		header,
 		m.viewport.View(),
@@ -190,14 +225,63 @@ func (m *Model) syncViewport() {
 }
 
 func (m *Model) resizeInput() {
-	lines := m.input.LineCount()
+	lines := wrappedInputLineCount(m.input)
+	lines += len(m.pendingImgs)
 	if lines < 1 {
 		lines = 1
 	}
-	if lines > 6 {
-		lines = 6
+	if maxLines := m.maxInputLines(); maxLines > 0 && lines > maxLines {
+		lines = maxLines
 	}
 	m.input.SetHeight(lines)
+}
+
+func wrappedInputLineCount(input textarea.Model) int {
+	width := input.Width()
+	if width <= 0 {
+		return max(1, input.LineCount())
+	}
+	total := 0
+	for _, line := range strings.Split(input.Value(), "\n") {
+		if line == "" {
+			total++
+			continue
+		}
+		wrapped := ansi.Hardwrap(ansi.Wordwrap(line, width, ""), width, true)
+		count := len(strings.Split(wrapped, "\n"))
+		if count < 1 {
+			count = 1
+		}
+		total += count
+	}
+	if total < 1 {
+		return 1
+	}
+	return total
+}
+
+func (m Model) maxInputLines() int {
+	if m.height <= 0 {
+		return 0
+	}
+	// header + viewport + input border + footer
+	maxLines := m.height - 5
+	if maxLines < 1 {
+		return 1
+	}
+	return maxLines
+}
+
+func renderInputBox(input string, images []tool.ContentPart) string {
+	if len(images) == 0 {
+		return input
+	}
+	parts := []string{input}
+	for i, image := range images {
+		label := fmt.Sprintf("[Image #%d] %s", i+1, image.MIMEType)
+		parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Render(label))
+	}
+	return strings.Join(parts, "\n")
 }
 
 func renderItem(item Item, width int) string {
@@ -212,7 +296,7 @@ func renderItem(item Item, width int) string {
 	case ItemTool:
 		body := item.Title
 		if item.Preview != "" {
-			body += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(item.Preview)
+			body += "\n" + renderToolPreview(item.Preview, item.PreviewIsDiff)
 		}
 		if item.Error != "" {
 			body += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(item.Error)
@@ -244,4 +328,23 @@ func max(a int, b int) int {
 
 func (m Model) String() string {
 	return fmt.Sprintf("items=%d", len(m.state.Items))
+}
+
+func renderToolPreview(preview string, isDiff bool) string {
+	if !isDiff {
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(preview)
+	}
+	lines := strings.Split(preview, "\n")
+	rendered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		style := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+		switch {
+		case strings.HasPrefix(line, "+"):
+			style = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+		case strings.HasPrefix(line, "-"):
+			style = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+		}
+		rendered = append(rendered, style.Render(line))
+	}
+	return strings.Join(rendered, "\n")
 }
