@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"fritz/internal/adapters/slack"
 	"fritz/internal/adapters/telegram"
 	"fritz/internal/agent"
 	"fritz/internal/auth"
@@ -84,6 +85,13 @@ func defaultClientFactory(cwd string, cfg config.Runtime) model.Client {
 func RunTelegramProcess(ctx context.Context, args []string) error {
 	cwd := mustGetwd()
 	return runTelegramProcess(ctx, args, os.Stdout, cwd, func(cfg config.Runtime) model.Client {
+		return defaultClientFactory(cwd, cfg)
+	}, nil)
+}
+
+func RunSlackProcess(ctx context.Context, args []string) error {
+	cwd := mustGetwd()
+	return runSlackProcess(ctx, args, os.Stdout, cwd, func(cfg config.Runtime) model.Client {
 		return defaultClientFactory(cwd, cfg)
 	}, nil)
 }
@@ -173,10 +181,10 @@ func runWithProfile(
 		}
 		defer closeLogger()
 		return runServe(ctx, out, cwd, cmd, cfg, newClient, registry, profile)
-	case command.Telegram:
-		if !allowTelegram {
-			return wrapError("command", errors.New("use fritz-telegram"))
-		}
+		case command.Telegram:
+			if !allowTelegram {
+				return wrapError("command", errors.New("use fritz-telegram"))
+			}
 		cfg, err := resolveRuntimeConfig(cwd, cmd.Config)
 		if err != nil {
 			return wrapError("config", err)
@@ -184,10 +192,12 @@ func runWithProfile(
 		closeLogger, err := configureLogger(cwd, cfg)
 		if err != nil {
 			return wrapError("config", err)
-		}
-		defer closeLogger()
-		return runTelegram(ctx, out, cwd, cmd, cfg, newClient, registry)
-	case command.AuthLogin:
+			}
+			defer closeLogger()
+			return runTelegram(ctx, out, cwd, cmd, cfg, newClient, registry)
+		case command.Slack:
+			return wrapError("command", errors.New("use fritz-slack"))
+		case command.AuthLogin:
 		cfg, err := resolveRuntimeConfig(cwd, cmd.Config)
 		if err != nil {
 			return wrapError("config", err)
@@ -531,6 +541,33 @@ func printGatewayUsage(out io.Writer) {
 	fmt.Fprintln(out, "  --openai-codex-redirect-url <url>")
 }
 
+func printSlackUsage(out io.Writer) {
+	fmt.Fprintln(out, "fritz-slack")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "usage:")
+	fmt.Fprintln(out, "  fritz-slack")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "config flags:")
+	fmt.Fprintln(out, "  --slack-bot-token <token>")
+	fmt.Fprintln(out, "  --slack-app-token <token>")
+	fmt.Fprintln(out, "  --slack-endpoint <url>")
+	fmt.Fprintln(out, "  --slack-allow-user <id>")
+	fmt.Fprintln(out, "  --slack-allow-channel <id>")
+	fmt.Fprintln(out, "  --slack-assistant=<bool>")
+	fmt.Fprintln(out, "  --heartbeat=<bool>")
+	fmt.Fprintln(out, "  --heartbeat-interval <duration>")
+	fmt.Fprintln(out, "  --log-file <path>")
+	fmt.Fprintln(out, "  --log-level <level>")
+	fmt.Fprintln(out, "  --provider <name>")
+	fmt.Fprintln(out, "  --model <id>")
+	fmt.Fprintln(out, "  --gemini-endpoint <url>")
+	fmt.Fprintln(out, "  --openai-codex-endpoint <url>")
+	fmt.Fprintln(out, "  --openai-codex-auth-base-url <url>")
+	fmt.Fprintln(out, "  --openai-codex-client-id <id>")
+	fmt.Fprintln(out, "  --openai-codex-originator <value>")
+	fmt.Fprintln(out, "  --openai-codex-redirect-url <url>")
+}
+
 func configSourceFromCommand(options command.ConfigOptions) config.Source {
 	return config.Source{
 		Provider:               options.Provider,
@@ -547,6 +584,14 @@ func configSourceFromCommand(options command.ConfigOptions) config.Source {
 			PollTimeout:  options.TelegramPollTimeout,
 			PairingToken: options.TelegramPairingToken,
 			AllowedUsers: append([]string(nil), options.TelegramAllowedUsers...),
+		},
+		Slack: config.SlackConfigSource{
+			BotToken:        options.SlackBotToken,
+			AppToken:        options.SlackAppToken,
+			Endpoint:        options.SlackEndpoint,
+			AllowedUsers:    append([]string(nil), options.SlackAllowedUsers...),
+			AllowedChannels: append([]string(nil), options.SlackAllowedChannels...),
+			Assistant:       options.SlackAssistantEnabled,
 		},
 		Heartbeat: config.HeartbeatConfigSource{
 			Enabled:  options.HeartbeatEnabled,
@@ -985,4 +1030,94 @@ func runTelegramProcess(
 	}
 	defer closeLogger()
 	return runTelegram(ctx, out, cwd, cmd, cfg, newClient, registry)
+}
+
+func runSlack(
+	ctx context.Context,
+	out io.Writer,
+	cwd string,
+	cfg config.Runtime,
+	newClient func(cfg config.Runtime) model.Client,
+	registry *tool.Registry,
+) error {
+	_ = out
+	if err := validateProviderAccess(ctx, cwd, cfg); err != nil {
+		return wrapError("config", err)
+	}
+	if err := cfg.ValidateSlack(); err != nil {
+		return wrapError("config", err)
+	}
+	service := newService(cwd, cfg, newClient, registry, prompt.ProfileGateway)
+	gw := ingressruntime.New(cwd, cfg, engine.WrapService(service))
+	client := slack.NewHTTPClient(http.DefaultClient, cfg.Slack.Endpoint, cfg.Slack.BotToken, cfg.Slack.AppToken)
+	adapter := slack.NewAdapterWithPaths(gw.Paths(), client, gw, slack.Config{
+		AllowedUsers:    append([]string(nil), cfg.Slack.AllowedUsers...),
+		AllowedChannels: append([]string(nil), cfg.Slack.AllowedChannels...),
+		Assistant:       cfg.Slack.Assistant,
+	})
+	var manager *heartbeat.Manager
+	var err error
+	if cfg.Heartbeat.Enabled {
+		source := heartbeat.CombineSources(
+			newHeartbeatSource(cfg),
+			reminderwake.New(gw.Paths().ReminderPath, gw.Paths().RoutingSessionMapPath),
+		)
+		manager, err = heartbeat.NewManager(
+			cfg.Heartbeat.Interval,
+			source,
+			heartbeat.SessionRunner{
+				Service:      engine.WrapService(service),
+				SessionPaths: gw.SessionPathForKey,
+				Prompt:       "Heartbeat check. If there is nothing actionable to do right now, reply exactly HEARTBEAT_OK.",
+				PromptForWake: func(wake heartbeat.Wake) string {
+					if strings.TrimSpace(wake.Reason) == "" {
+						return "Heartbeat check. If there is nothing actionable to do right now, reply exactly HEARTBEAT_OK."
+					}
+					return "A reminder or scheduled task is due now.\n\n" + strings.TrimSpace(wake.Reason) + "\n\nReply only with the concrete user-facing reminder to send now. If nothing should be sent, reply exactly HEARTBEAT_OK."
+				},
+			},
+			slack.NewSender(client),
+			heartbeat.NewJSONStoreForPaths(gw.Paths()),
+		)
+		if err != nil {
+			return wrapError("heartbeat", err)
+		}
+	}
+	if manager != nil {
+		go func() {
+			_ = manager.Run(ctx)
+		}()
+	}
+	return wrapError("slack", adapter.Run(ctx))
+}
+
+func runSlackProcess(
+	ctx context.Context,
+	args []string,
+	out io.Writer,
+	cwd string,
+	newClient func(config.Runtime) model.Client,
+	registry *tool.Registry,
+) error {
+	if len(args) == 1 {
+		switch args[0] {
+		case "help", "--help", "-h":
+			printSlackUsage(out)
+			return nil
+		}
+	}
+	cmd, err := command.ParseSlackProcess(args)
+	if err != nil {
+		return wrapError("command", err)
+	}
+	cfg, err := resolveRuntimeConfig(cwd, cmd.Config)
+	if err != nil {
+		return wrapError("config", err)
+	}
+	closeLogger, err := configureLogger(cwd, cfg)
+	if err != nil {
+		return wrapError("config", err)
+	}
+	defer closeLogger()
+	return runSlack(ctx, out, cwd, cfg, newClient, registry)
 }

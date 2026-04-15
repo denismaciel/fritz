@@ -37,6 +37,12 @@ type ConfigOptions struct {
 	TelegramPollTimeout    *time.Duration
 	TelegramPairingToken   string
 	TelegramAllowedUsers   []string
+	SlackBotToken          string
+	SlackAppToken          string
+	SlackEndpoint          string
+	SlackAllowedUsers      []string
+	SlackAllowedChannels   []string
+	SlackAssistantEnabled  *bool
 	HeartbeatEnabled       *bool
 	HeartbeatInterval      *time.Duration
 	LogFile                string
@@ -94,6 +100,12 @@ type Telegram struct {
 }
 
 func (Telegram) isCommand() {}
+
+type Slack struct {
+	Config ConfigOptions
+}
+
+func (Slack) isCommand() {}
 
 type AuthLogin struct {
 	Provider string
@@ -170,6 +182,17 @@ func ParseTelegramProcess(args []string) (Telegram, error) {
 		return Telegram{}, err
 	}
 	return Telegram{PollOnce: pollOnce, Config: cfg}, nil
+}
+
+func ParseSlackProcess(args []string) (Slack, error) {
+	_, cfg, remaining, err := parseOptions(args)
+	if err != nil {
+		return Slack{}, err
+	}
+	if len(remaining) > 0 {
+		return Slack{}, fmt.Errorf("unknown slack arg %q", remaining[0])
+	}
+	return Slack{Config: cfg}, nil
 }
 
 func parseAuthArgs(cfg ConfigOptions, args []string) (Command, error) {
@@ -309,6 +332,36 @@ func parseOptions(args []string) (SessionOptions, ConfigOptions, []string, error
 			}
 			i++
 			cfg.TelegramAllowedUsers = append(cfg.TelegramAllowedUsers, args[i])
+		case "--slack-bot-token":
+			if i+1 >= len(args) {
+				return SessionOptions{}, ConfigOptions{}, nil, errors.New("missing slack bot token")
+			}
+			i++
+			cfg.SlackBotToken = args[i]
+		case "--slack-app-token":
+			if i+1 >= len(args) {
+				return SessionOptions{}, ConfigOptions{}, nil, errors.New("missing slack app token")
+			}
+			i++
+			cfg.SlackAppToken = args[i]
+		case "--slack-endpoint":
+			if i+1 >= len(args) {
+				return SessionOptions{}, ConfigOptions{}, nil, errors.New("missing slack endpoint")
+			}
+			i++
+			cfg.SlackEndpoint = args[i]
+		case "--slack-allow-user":
+			if i+1 >= len(args) {
+				return SessionOptions{}, ConfigOptions{}, nil, errors.New("missing slack allow user")
+			}
+			i++
+			cfg.SlackAllowedUsers = append(cfg.SlackAllowedUsers, args[i])
+		case "--slack-allow-channel":
+			if i+1 >= len(args) {
+				return SessionOptions{}, ConfigOptions{}, nil, errors.New("missing slack allow channel")
+			}
+			i++
+			cfg.SlackAllowedChannels = append(cfg.SlackAllowedChannels, args[i])
 		case "--heartbeat-interval":
 			if i+1 >= len(args) {
 				return SessionOptions{}, ConfigOptions{}, nil, errors.New("missing heartbeat interval")
@@ -428,6 +481,13 @@ func parseOptions(args []string) (SessionOptions, ConfigOptions, []string, error
 					return SessionOptions{}, ConfigOptions{}, nil, err
 				}
 				cfg.HeartbeatEnabled = &value
+				continue
+			}
+			if value, ok, err := parseBoolFlag(args[i], "--slack-assistant"); ok {
+				if err != nil {
+					return SessionOptions{}, ConfigOptions{}, nil, err
+				}
+				cfg.SlackAssistantEnabled = &value
 				continue
 			}
 			remaining = append(remaining, args[i])

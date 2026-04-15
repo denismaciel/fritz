@@ -85,6 +85,10 @@ func (g *Gateway) Paths() StatePaths {
 }
 
 func (g *Gateway) HandleInbound(ctx context.Context, message InboundMessage) (HandleResult, error) {
+	return g.HandleInboundStream(ctx, message, nil)
+}
+
+func (g *Gateway) HandleInboundStream(ctx context.Context, message InboundMessage, emit func(engine.Event) error) (HandleResult, error) {
 	logger := logx.Component("gateway").With().
 		Str("event", "gateway.inbound.handle").
 		Str("channel", strings.TrimSpace(message.Channel)).
@@ -133,6 +137,12 @@ func (g *Gateway) HandleInbound(ctx context.Context, message InboundMessage) (Ha
 
 	replyText := ""
 	for event := range run.Events {
+		if emit != nil {
+			if err := emit(event); err != nil {
+				logger.Error().Err(err).Str("event", "gateway.event.emit").Msg("")
+				return HandleResult{}, err
+			}
+		}
 		if event.Kind != engine.EventMessageCompleted || event.Message == nil {
 			continue
 		}
@@ -177,7 +187,20 @@ func (g *Gateway) HandleInbound(ctx context.Context, message InboundMessage) (Ha
 			UserID:  message.UserID,
 			Text:    replyText,
 		}},
-	}, nil
+		}, nil
+}
+
+func (g *Gateway) ClearSessionKey(_ context.Context, sessionKey string) error {
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return fmt.Errorf("missing session key")
+	}
+	state, err := g.loadState()
+	if err != nil {
+		return err
+	}
+	delete(state.Sessions, sessionKey)
+	return g.saveState(state)
 }
 
 func (g *Gateway) loadState() (SessionMapFile, error) {

@@ -24,6 +24,7 @@ const (
 	DefaultOpenAICodexOriginator  = "fritz"
 	DefaultOpenAICodexRedirectURL = "http://localhost:1455/auth/callback"
 	DefaultTelegramEndpoint       = "https://api.telegram.org"
+	DefaultSlackAPIEndpoint       = "https://slack.com/api"
 	DefaultConfigPath             = ".fritz/config.json"
 	DefaultSessionDir             = ""
 	DefaultCompactThresholdTurns  = 20
@@ -63,6 +64,15 @@ type TelegramConfig struct {
 	AllowedUsers []string
 }
 
+type SlackConfig struct {
+	BotToken        string
+	AppToken        string
+	Endpoint        string
+	AllowedUsers    []string
+	AllowedChannels []string
+	Assistant       bool
+}
+
 type HeartbeatConfig struct {
 	Enabled  bool
 	Interval time.Duration
@@ -84,6 +94,7 @@ type Runtime struct {
 	OpenAICodexOriginator  string
 	OpenAICodexRedirectURL string
 	Telegram               TelegramConfig
+	Slack                  SlackConfig
 	Heartbeat              HeartbeatConfig
 	Log                    LogConfig
 	Chat                   ChatConfig
@@ -123,6 +134,15 @@ type TelegramConfigSource struct {
 	AllowedUsers []string
 }
 
+type SlackConfigSource struct {
+	BotToken        string
+	AppToken        string
+	Endpoint        string
+	AllowedUsers    []string
+	AllowedChannels []string
+	Assistant       *bool
+}
+
 type HeartbeatConfigSource struct {
 	Enabled  *bool
 	Interval *time.Duration
@@ -144,6 +164,7 @@ type Source struct {
 	OpenAICodexOriginator  string
 	OpenAICodexRedirectURL string
 	Telegram               TelegramConfigSource
+	Slack                  SlackConfigSource
 	Heartbeat              HeartbeatConfigSource
 	Log                    LogConfigSource
 	Chat                   ChatConfigSource
@@ -197,6 +218,10 @@ func DefaultSource() Source {
 			PollTimeout:  durationPtr(DefaultTelegramPollTimeout),
 			AllowedUsers: nil,
 		},
+		Slack: SlackConfigSource{
+			Endpoint:  DefaultSlackAPIEndpoint,
+			Assistant: boolPtr(true),
+		},
 		Heartbeat: HeartbeatConfigSource{
 			Enabled:  boolPtr(false),
 			Interval: durationPtr(time.Minute),
@@ -239,6 +264,11 @@ func LoadEnv() Source {
 			Endpoint:     strings.TrimSpace(os.Getenv("FRITZ_TELEGRAM_ENDPOINT")),
 			PairingToken: strings.TrimSpace(os.Getenv("FRITZ_TELEGRAM_PAIRING_TOKEN")),
 		},
+		Slack: SlackConfigSource{
+			BotToken: strings.TrimSpace(os.Getenv("SLACK_BOT_TOKEN")),
+			AppToken: strings.TrimSpace(os.Getenv("SLACK_APP_TOKEN")),
+			Endpoint: strings.TrimSpace(os.Getenv("FRITZ_SLACK_ENDPOINT")),
+		},
 		Log: LogConfigSource{
 			File:  strings.TrimSpace(os.Getenv("FRITZ_LOG_FILE")),
 			Level: strings.TrimSpace(os.Getenv("FRITZ_LOG_LEVEL")),
@@ -277,6 +307,11 @@ func LoadEnv() Source {
 		env.Telegram.PollTimeout = &value
 	}
 	env.Telegram.AllowedUsers = loadStringListEnv("FRITZ_TELEGRAM_ALLOWED_USERS")
+	env.Slack.AllowedUsers = loadStringListEnv("FRITZ_SLACK_ALLOWED_USERS")
+	env.Slack.AllowedChannels = loadStringListEnv("FRITZ_SLACK_ALLOWED_CHANNELS")
+	if value, ok := loadBoolEnv("FRITZ_SLACK_ASSISTANT_ENABLED"); ok {
+		env.Slack.Assistant = &value
+	}
 	if value, ok := loadBoolEnv("FRITZ_HEARTBEAT_ENABLED"); ok {
 		env.Heartbeat.Enabled = &value
 	}
@@ -415,6 +450,48 @@ func Resolve(s Sources) Runtime {
 				s.File.Telegram.AllowedUsers,
 				s.Env.Telegram.AllowedUsers,
 				s.Flags.Telegram.AllowedUsers,
+			),
+		},
+		Slack: SlackConfig{
+			BotToken: firstNonEmpty(
+				s.Flags.Slack.BotToken,
+				s.Env.Slack.BotToken,
+				s.File.Slack.BotToken,
+				s.GlobalFile.Slack.BotToken,
+				s.Defaults.Slack.BotToken,
+			),
+			AppToken: firstNonEmpty(
+				s.Flags.Slack.AppToken,
+				s.Env.Slack.AppToken,
+				s.File.Slack.AppToken,
+				s.GlobalFile.Slack.AppToken,
+				s.Defaults.Slack.AppToken,
+			),
+			Endpoint: firstNonEmpty(
+				s.Flags.Slack.Endpoint,
+				s.Env.Slack.Endpoint,
+				s.File.Slack.Endpoint,
+				s.GlobalFile.Slack.Endpoint,
+				s.Defaults.Slack.Endpoint,
+			),
+			AllowedUsers: mergeStringLists(
+				s.GlobalFile.Slack.AllowedUsers,
+				s.File.Slack.AllowedUsers,
+				s.Env.Slack.AllowedUsers,
+				s.Flags.Slack.AllowedUsers,
+			),
+			AllowedChannels: mergeStringLists(
+				s.GlobalFile.Slack.AllowedChannels,
+				s.File.Slack.AllowedChannels,
+				s.Env.Slack.AllowedChannels,
+				s.Flags.Slack.AllowedChannels,
+			),
+			Assistant: firstNonNilBool(
+				s.Flags.Slack.Assistant,
+				s.Env.Slack.Assistant,
+				s.File.Slack.Assistant,
+				s.GlobalFile.Slack.Assistant,
+				s.Defaults.Slack.Assistant,
 			),
 		},
 		Heartbeat: HeartbeatConfig{
@@ -580,6 +657,16 @@ func (c Runtime) ValidateTelegram() error {
 	return nil
 }
 
+func (c Runtime) ValidateSlack() error {
+	if strings.TrimSpace(c.Slack.BotToken) == "" {
+		return errors.New("missing SLACK_BOT_TOKEN")
+	}
+	if strings.TrimSpace(c.Slack.AppToken) == "" {
+		return errors.New("missing SLACK_APP_TOKEN")
+	}
+	return nil
+}
+
 func boolPtr(v bool) *bool                       { return &v }
 func intPtr(v int) *int                          { return &v }
 func durationPtr(v time.Duration) *time.Duration { return &v }
@@ -697,6 +784,7 @@ type fileConfig struct {
 	OpenAICodexOriginator  string              `json:"openAICodexOriginator"`
 	OpenAICodexRedirectURL string              `json:"openAICodexRedirectURL"`
 	Telegram               fileTelegramConfig  `json:"telegram"`
+	Slack                  fileSlackConfig     `json:"slack"`
 	Heartbeat              fileHeartbeatConfig `json:"heartbeat"`
 	Log                    fileLogConfig       `json:"log"`
 	Chat                   fileChatConfig      `json:"chat"`
@@ -711,6 +799,15 @@ type fileTelegramConfig struct {
 	PollTimeout  string   `json:"pollTimeout"`
 	PairingToken string   `json:"pairingToken"`
 	AllowedUsers []string `json:"allowedUsers"`
+}
+
+type fileSlackConfig struct {
+	BotToken        string   `json:"botToken"`
+	AppToken        string   `json:"appToken"`
+	Endpoint        string   `json:"endpoint"`
+	AllowedUsers    []string `json:"allowedUsers"`
+	AllowedChannels []string `json:"allowedChannels"`
+	Assistant       *bool    `json:"assistant"`
 }
 
 type fileHeartbeatConfig struct {
@@ -762,6 +859,14 @@ func (f fileConfig) toSource() (Source, error) {
 			Endpoint:     strings.TrimSpace(f.Telegram.Endpoint),
 			PairingToken: strings.TrimSpace(f.Telegram.PairingToken),
 			AllowedUsers: compactStrings(f.Telegram.AllowedUsers),
+		},
+		Slack: SlackConfigSource{
+			BotToken:        strings.TrimSpace(f.Slack.BotToken),
+			AppToken:        strings.TrimSpace(f.Slack.AppToken),
+			Endpoint:        strings.TrimSpace(f.Slack.Endpoint),
+			AllowedUsers:    compactStrings(f.Slack.AllowedUsers),
+			AllowedChannels: compactStrings(f.Slack.AllowedChannels),
+			Assistant:       f.Slack.Assistant,
 		},
 		Heartbeat: HeartbeatConfigSource{
 			Enabled: f.Heartbeat.Enabled,

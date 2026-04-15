@@ -26,9 +26,14 @@
             subPackage = "cmd/fritz-telegram";
             mainProgram = "fritz-telegram";
           };
+          fritz-slack = pkgs.callPackage ./package.nix {
+            pname = "fritz-slack";
+            subPackage = "cmd/fritz-slack";
+            mainProgram = "fritz-slack";
+          };
         in
         {
-          inherit fritz fritz-telegram;
+          inherit fritz fritz-telegram fritz-slack;
           default = fritz;
         }
       );
@@ -41,6 +46,10 @@
         fritz-telegram = {
           type = "app";
           program = "${self.packages.${system}.fritz-telegram}/bin/fritz-telegram";
+        };
+        fritz-slack = {
+          type = "app";
+          program = "${self.packages.${system}.fritz-slack}/bin/fritz-slack";
         };
         default = self.apps.${system}.fritz;
       });

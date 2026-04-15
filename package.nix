@@ -1,6 +1,8 @@
 {
   buildGoModule,
   lib,
+  pkg-config,
+  sqlite,
   pname ? "fritz",
   subPackage ? "cmd/fritz",
   mainProgram ? pname,
@@ -13,7 +15,12 @@ buildGoModule {
 
   subPackages = [ subPackage ];
 
-  vendorHash = "sha256-EKRLp/yDYIvwQF1RvlTxhylnTzdnHoMvticQx8ONhlQ=";
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ sqlite ];
+
+  tags = [ "sqlite_fts5" ];
+
+  vendorHash = "sha256-J5ra0jhG2uBL0B+IaPggHR9FaHRFLsuk6GJrsslKsx0=";
 
   ldflags = [
     "-s"

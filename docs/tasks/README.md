@@ -16,6 +16,7 @@ This directory groups longer-running work into themed packs. Each pack has an `I
 - [`polish-stabilization/`](polish-stabilization/INDEX.md) — tighten errors, retries, packaging, docs, and regression coverage
 - [`prompt-layer-skills/`](prompt-layer-skills/INDEX.md) — add repo instructions, system prompt files, and skills
 - [`secret-store-v0/`](secret-store-v0/INDEX.md) — add harness-owned named secret storage without leaking plaintext into docs or session files
+- [`slack-native-gateway/`](slack-native-gateway/INDEX.md) — replace Bill Nick with a native Fritz Slack transport and gateway
 - [`tool-runtime-upgrades/`](tool-runtime-upgrades/INDEX.md) — clean up runtime seams after tool parity lands
 
 ## Conventions

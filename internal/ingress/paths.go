@@ -22,6 +22,11 @@ type StatePaths struct {
 	TelegramAllowlistPath string
 	TelegramPairingPath   string
 
+	SlackDir              string
+	SlackAllowlistPath    string
+	SlackEventStatePath   string
+	SlackContextStatePath string
+
 	BindingsDir         string
 	BindingsCurrentPath string
 
@@ -45,6 +50,7 @@ func ResolveStatePaths(cwd string, cfg config.Runtime) StatePaths {
 	}
 	routingDir := filepath.Join(root, "routing")
 	telegramDir := filepath.Join(root, "telegram")
+	slackDir := filepath.Join(root, "slack")
 	bindingsDir := filepath.Join(root, "bindings")
 	heartbeatDir := filepath.Join(root, "heartbeat")
 	reminderDir := filepath.Join(root, "reminders")
@@ -60,6 +66,11 @@ func ResolveStatePaths(cwd string, cfg config.Runtime) StatePaths {
 		TelegramOffsetPath:    filepath.Join(telegramDir, "offset.json"),
 		TelegramAllowlistPath: filepath.Join(telegramDir, "allowlist.json"),
 		TelegramPairingPath:   filepath.Join(telegramDir, "pairing.json"),
+
+		SlackDir:              slackDir,
+		SlackAllowlistPath:    filepath.Join(slackDir, "allowlist.json"),
+		SlackEventStatePath:   filepath.Join(slackDir, "events.json"),
+		SlackContextStatePath: filepath.Join(slackDir, "context.json"),
 
 		BindingsDir:         bindingsDir,
 		BindingsCurrentPath: filepath.Join(bindingsDir, "current.json"),

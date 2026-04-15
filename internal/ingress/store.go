@@ -91,3 +91,29 @@ type TelegramPairingFile struct {
 	Version int                     `json:"version"`
 	Paired  []TelegramPairingRecord `json:"paired"`
 }
+
+type SlackAllowlistFile struct {
+	Version  int      `json:"version"`
+	Users    []string `json:"users,omitempty"`
+	Channels []string `json:"channels,omitempty"`
+}
+
+type SlackEventStateFile struct {
+	Version      int      `json:"version"`
+	RecentEvents []string `json:"recentEvents,omitempty"`
+}
+
+type SlackContextBinding struct {
+	RouteKey  string            `json:"routeKey"`
+	TeamID    string            `json:"teamId,omitempty"`
+	ChannelID string            `json:"channelId,omitempty"`
+	ThreadTS  string            `json:"threadTs,omitempty"`
+	Title     string            `json:"title,omitempty"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
+	UpdatedAt string            `json:"updatedAt,omitempty"`
+}
+
+type SlackContextStateFile struct {
+	Version  int                   `json:"version"`
+	Bindings []SlackContextBinding `json:"bindings,omitempty"`
+}
