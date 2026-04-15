@@ -172,7 +172,10 @@ func (a *Adapter) handleMessageEvent(ctx context.Context, teamID string, eventID
 		return nil
 	}
 	chatType := chatTypeForEvent(event)
-	if event.Type == "message" && chatType != ingress.ChatTypeDM && strings.TrimSpace(event.ThreadTS) == "" {
+	rootTS := threadRootTS(event)
+	assistantBinding := a.lookupContext(teamID, event.Channel, rootTS)
+	assistant := assistantBinding.RouteKey != ""
+	if event.Type == "message" && chatType != ingress.ChatTypeDM && !assistant {
 		return nil
 	}
 	if !a.allowed(event.User, event.Channel) {
@@ -187,9 +190,6 @@ func (a *Adapter) handleMessageEvent(ctx context.Context, teamID string, eventID
 	if text == "" {
 		return nil
 	}
-	rootTS := threadRootTS(event)
-	assistantBinding := a.lookupContext(teamID, event.Channel, rootTS)
-	assistant := assistantBinding.RouteKey != ""
 	sessionKey := buildRouteKey(teamID, event.Channel, rootTS, chatType, assistant)
 	if strings.EqualFold(strings.TrimSpace(text), "/clear") {
 		if err := a.handler.ClearSessionKey(ctx, sessionKey); err != nil {

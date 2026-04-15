@@ -146,6 +146,32 @@ func TestHandleAssistantThreadStartedStoresContextAndPrompts(t *testing.T) {
 	}
 }
 
+func TestHandleMessageEventIgnoresPlainChannelThreadReply(t *testing.T) {
+	dir := t.TempDir()
+	client := &fakeClient{}
+	handler := &fakeHandler{result: ingress.HandleResult{Messages: []ingress.OutboundMessage{{Text: "done"}}}}
+	adapter := NewAdapterWithPaths(ingress.ResolveStatePaths(dir, testRuntimeConfig()), client, handler, Config{})
+
+	err := adapter.handleMessageEvent(context.Background(), "T1", "E1", Event{
+		Type:        "message",
+		User:        "U1",
+		Text:        "plain thread reply",
+		Channel:     "C1",
+		ChannelType: "channel",
+		ThreadTS:    "20.1",
+		TS:          "20.2",
+	}, map[string]any{})
+	if err != nil {
+		t.Fatalf("handleMessageEvent() error = %v", err)
+	}
+	if len(client.posts) != 0 {
+		t.Fatalf("posts = %#v", client.posts)
+	}
+	if len(client.statuses) != 0 {
+		t.Fatalf("statuses = %#v", client.statuses)
+	}
+}
+
 func TestUploadArtifactsUploadsFiles(t *testing.T) {
 	dir := t.TempDir()
 	root := filepath.Join(dir, "artifacts")
