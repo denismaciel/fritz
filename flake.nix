@@ -62,9 +62,12 @@
         {
           default = pkgs.mkShell {
             packages = with pkgs; [
+              gcc
               go
               gopls
               gotools
+              pkg-config
+              sqlite
             ];
           };
         }

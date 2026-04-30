@@ -10,6 +10,10 @@ This directory collects project notes, feature docs, task packs, runbooks, and r
 ## Feature and design docs
 
 - [`context-compaction-plan.md`](context-compaction-plan.md) — notes on Codex-style compaction and the local implementation plan
+- [`memory-palace-canonical-schema.md`](memory-palace-canonical-schema.md) — target Fritz-native canonical schema: source records first, derived chunks second, FTS/vector indexes disposable
+- [`memory-palace-integration.md`](memory-palace-integration.md) — concrete integration model: optional subsystem, write/read/control paths, and rollout
+- [`memory-palace-storage-notes.md`](memory-palace-storage-notes.md) — early notes on a promotable Go memory package, backend options, and interface boundaries
+- [`memory-palace-sync-impl-plan.md`](memory-palace-sync-impl-plan.md) — detailed execution plan for source-sync, canonical entries, per-source rebuilds, tombstones, and tests
 - [`openai-codex-subscription-auth.md`](openai-codex-subscription-auth.md) — commands, config, and auth flow for `openai-codex`
 
 ## Task packs

@@ -12,8 +12,9 @@ func TestResolveMergesSources(t *testing.T) {
 	runtime := Resolve(Sources{
 		Defaults: DefaultSource(),
 		File: Source{
-			Provider: "gemini",
-			ModelID:  "file-model",
+			Provider:               "gemini",
+			ModelID:                "file-model",
+			GeminiEmbeddingModelID: "file-embedding-model",
 			Log: LogConfigSource{
 				File:  "file-log.jsonl",
 				Level: "warn",
@@ -32,8 +33,9 @@ func TestResolveMergesSources(t *testing.T) {
 			},
 		},
 		Env: Source{
-			Provider:     "gemini",
-			GeminiAPIKey: "env-key",
+			Provider:                 "gemini",
+			GeminiAPIKey:             "env-key",
+			GeminiEmbeddingDimension: intPtr(256),
 			Log: LogConfigSource{
 				File: "env-log.jsonl",
 			},
@@ -87,6 +89,12 @@ func TestResolveMergesSources(t *testing.T) {
 	}
 	if runtime.ModelID != "flag-model" {
 		t.Fatalf("ModelID = %q", runtime.ModelID)
+	}
+	if runtime.GeminiEmbeddingModelID != "file-embedding-model" {
+		t.Fatalf("GeminiEmbeddingModelID = %q", runtime.GeminiEmbeddingModelID)
+	}
+	if runtime.GeminiEmbeddingDimension != 256 {
+		t.Fatalf("GeminiEmbeddingDimension = %d", runtime.GeminiEmbeddingDimension)
 	}
 	if runtime.Telegram.BotToken != "env-bot-token" {
 		t.Fatalf("Telegram.BotToken = %q", runtime.Telegram.BotToken)
@@ -253,6 +261,8 @@ func TestLoadFile(t *testing.T) {
   "provider": "openai-codex",
   "model": "file-model",
   "geminiEndpoint": "https://example.test",
+  "geminiEmbeddingModel": "gemini-embedding-001",
+  "geminiEmbeddingDimension": 128,
   "openAICodexEndpoint": "https://chatgpt.example.test/backend-api",
   "openAICodexAuthBaseURL": "https://auth.example.test",
   "openAICodexClientID": "client-test",
@@ -305,6 +315,12 @@ func TestLoadFile(t *testing.T) {
 	}
 	if source.GeminiEndpoint != "https://example.test" {
 		t.Fatalf("GeminiEndpoint = %q", source.GeminiEndpoint)
+	}
+	if source.GeminiEmbeddingModelID != "gemini-embedding-001" {
+		t.Fatalf("GeminiEmbeddingModelID = %q", source.GeminiEmbeddingModelID)
+	}
+	if source.GeminiEmbeddingDimension == nil || *source.GeminiEmbeddingDimension != 128 {
+		t.Fatalf("GeminiEmbeddingDimension = %#v", source.GeminiEmbeddingDimension)
 	}
 	if source.OpenAICodexEndpoint != "https://chatgpt.example.test/backend-api" {
 		t.Fatalf("OpenAICodexEndpoint = %q", source.OpenAICodexEndpoint)

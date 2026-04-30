@@ -16,6 +16,7 @@ import (
 const (
 	DefaultProvider               = provider.Gemini
 	DefaultGeminiModelID          = "gemini-3-flash-preview"
+	DefaultGeminiEmbeddingModelID = "gemini-embedding-001"
 	DefaultOpenAICodexModelID     = "gpt-5.4-high-reasoning"
 	DefaultGeminiEndpoint         = "https://generativelanguage.googleapis.com"
 	DefaultOpenAICodexEndpoint    = "https://chatgpt.com/backend-api"
@@ -84,23 +85,25 @@ type LogConfig struct {
 }
 
 type Runtime struct {
-	Provider               provider.Kind
-	GeminiAPIKey           string
-	ModelID                string
-	GeminiEndpoint         string
-	OpenAICodexEndpoint    string
-	OpenAICodexAuthBaseURL string
-	OpenAICodexClientID    string
-	OpenAICodexOriginator  string
-	OpenAICodexRedirectURL string
-	Telegram               TelegramConfig
-	Slack                  SlackConfig
-	Heartbeat              HeartbeatConfig
-	Log                    LogConfig
-	Chat                   ChatConfig
-	Session                SessionConfig
-	Prompt                 PromptConfig
-	CommandTimeout         time.Duration
+	Provider                 provider.Kind
+	GeminiAPIKey             string
+	ModelID                  string
+	GeminiEndpoint           string
+	GeminiEmbeddingModelID   string
+	GeminiEmbeddingDimension int
+	OpenAICodexEndpoint      string
+	OpenAICodexAuthBaseURL   string
+	OpenAICodexClientID      string
+	OpenAICodexOriginator    string
+	OpenAICodexRedirectURL   string
+	Telegram                 TelegramConfig
+	Slack                    SlackConfig
+	Heartbeat                HeartbeatConfig
+	Log                      LogConfig
+	Chat                     ChatConfig
+	Session                  SessionConfig
+	Prompt                   PromptConfig
+	CommandTimeout           time.Duration
 }
 
 type ChatConfigSource struct {
@@ -154,23 +157,25 @@ type LogConfigSource struct {
 }
 
 type Source struct {
-	Provider               string
-	GeminiAPIKey           string
-	ModelID                string
-	GeminiEndpoint         string
-	OpenAICodexEndpoint    string
-	OpenAICodexAuthBaseURL string
-	OpenAICodexClientID    string
-	OpenAICodexOriginator  string
-	OpenAICodexRedirectURL string
-	Telegram               TelegramConfigSource
-	Slack                  SlackConfigSource
-	Heartbeat              HeartbeatConfigSource
-	Log                    LogConfigSource
-	Chat                   ChatConfigSource
-	Session                SessionConfigSource
-	Prompt                 PromptConfigSource
-	Runtime                RuntimeConfigSource
+	Provider                 string
+	GeminiAPIKey             string
+	ModelID                  string
+	GeminiEndpoint           string
+	GeminiEmbeddingModelID   string
+	GeminiEmbeddingDimension *int
+	OpenAICodexEndpoint      string
+	OpenAICodexAuthBaseURL   string
+	OpenAICodexClientID      string
+	OpenAICodexOriginator    string
+	OpenAICodexRedirectURL   string
+	Telegram                 TelegramConfigSource
+	Slack                    SlackConfigSource
+	Heartbeat                HeartbeatConfigSource
+	Log                      LogConfigSource
+	Chat                     ChatConfigSource
+	Session                  SessionConfigSource
+	Prompt                   PromptConfigSource
+	Runtime                  RuntimeConfigSource
 }
 
 type Sources struct {
@@ -205,14 +210,16 @@ func DefaultModelIDForProvider(kind provider.Kind) string {
 
 func DefaultSource() Source {
 	return Source{
-		Provider:               string(DefaultProvider),
-		ModelID:                DefaultModelIDForProvider(DefaultProvider),
-		GeminiEndpoint:         DefaultGeminiEndpoint,
-		OpenAICodexEndpoint:    DefaultOpenAICodexEndpoint,
-		OpenAICodexAuthBaseURL: DefaultOpenAICodexAuthBaseURL,
-		OpenAICodexClientID:    DefaultOpenAICodexClientID,
-		OpenAICodexOriginator:  DefaultOpenAICodexOriginator,
-		OpenAICodexRedirectURL: DefaultOpenAICodexRedirectURL,
+		Provider:                 string(DefaultProvider),
+		ModelID:                  DefaultModelIDForProvider(DefaultProvider),
+		GeminiEndpoint:           DefaultGeminiEndpoint,
+		GeminiEmbeddingModelID:   DefaultGeminiEmbeddingModelID,
+		GeminiEmbeddingDimension: intPtr(0),
+		OpenAICodexEndpoint:      DefaultOpenAICodexEndpoint,
+		OpenAICodexAuthBaseURL:   DefaultOpenAICodexAuthBaseURL,
+		OpenAICodexClientID:      DefaultOpenAICodexClientID,
+		OpenAICodexOriginator:    DefaultOpenAICodexOriginator,
+		OpenAICodexRedirectURL:   DefaultOpenAICodexRedirectURL,
 		Telegram: TelegramConfigSource{
 			Endpoint:     DefaultTelegramEndpoint,
 			PollTimeout:  durationPtr(DefaultTelegramPollTimeout),
@@ -254,6 +261,7 @@ func LoadEnv() Source {
 		GeminiAPIKey:           strings.TrimSpace(os.Getenv("GEMINI_API_KEY")),
 		ModelID:                strings.TrimSpace(os.Getenv("FRITZ_MODEL")),
 		GeminiEndpoint:         strings.TrimSpace(os.Getenv("FRITZ_GEMINI_ENDPOINT")),
+		GeminiEmbeddingModelID: strings.TrimSpace(os.Getenv("FRITZ_GEMINI_EMBEDDING_MODEL")),
 		OpenAICodexEndpoint:    strings.TrimSpace(os.Getenv("FRITZ_OPENAI_CODEX_ENDPOINT")),
 		OpenAICodexAuthBaseURL: strings.TrimSpace(os.Getenv("FRITZ_OPENAI_CODEX_AUTH_BASE_URL")),
 		OpenAICodexClientID:    strings.TrimSpace(os.Getenv("FRITZ_OPENAI_CODEX_CLIENT_ID")),
@@ -298,6 +306,9 @@ func LoadEnv() Source {
 	}
 	if value, ok := loadDurationEnv("FRITZ_COMMAND_TIMEOUT"); ok {
 		env.Runtime.CommandTimeout = &value
+	}
+	if value, ok := loadIntEnv("FRITZ_GEMINI_EMBEDDING_DIMENSION"); ok {
+		env.GeminiEmbeddingDimension = &value
 	}
 	if value, ok := loadBoolEnv("FRITZ_NO_SKILLS"); ok {
 		env.Prompt.NoSkills = &value
@@ -380,6 +391,20 @@ func Resolve(s Sources) Runtime {
 			s.File.GeminiEndpoint,
 			s.GlobalFile.GeminiEndpoint,
 			s.Defaults.GeminiEndpoint,
+		),
+		GeminiEmbeddingModelID: firstNonEmpty(
+			s.Flags.GeminiEmbeddingModelID,
+			s.Env.GeminiEmbeddingModelID,
+			s.File.GeminiEmbeddingModelID,
+			s.GlobalFile.GeminiEmbeddingModelID,
+			s.Defaults.GeminiEmbeddingModelID,
+		),
+		GeminiEmbeddingDimension: firstNonNilInt(
+			s.Flags.GeminiEmbeddingDimension,
+			s.Env.GeminiEmbeddingDimension,
+			s.File.GeminiEmbeddingDimension,
+			s.GlobalFile.GeminiEmbeddingDimension,
+			s.Defaults.GeminiEmbeddingDimension,
 		),
 		OpenAICodexEndpoint: firstNonEmpty(
 			s.Flags.OpenAICodexEndpoint,
@@ -774,23 +799,25 @@ func compactStrings(values []string) []string {
 }
 
 type fileConfig struct {
-	Provider               string              `json:"provider"`
-	GeminiAPIKey           string              `json:"geminiApiKey"`
-	ModelID                string              `json:"model"`
-	GeminiEndpoint         string              `json:"geminiEndpoint"`
-	OpenAICodexEndpoint    string              `json:"openAICodexEndpoint"`
-	OpenAICodexAuthBaseURL string              `json:"openAICodexAuthBaseURL"`
-	OpenAICodexClientID    string              `json:"openAICodexClientID"`
-	OpenAICodexOriginator  string              `json:"openAICodexOriginator"`
-	OpenAICodexRedirectURL string              `json:"openAICodexRedirectURL"`
-	Telegram               fileTelegramConfig  `json:"telegram"`
-	Slack                  fileSlackConfig     `json:"slack"`
-	Heartbeat              fileHeartbeatConfig `json:"heartbeat"`
-	Log                    fileLogConfig       `json:"log"`
-	Chat                   fileChatConfig      `json:"chat"`
-	Session                fileSessionConfig   `json:"session"`
-	Prompt                 filePromptConfig    `json:"prompt"`
-	Runtime                fileRuntimeConfig   `json:"runtime"`
+	Provider                 string              `json:"provider"`
+	GeminiAPIKey             string              `json:"geminiApiKey"`
+	ModelID                  string              `json:"model"`
+	GeminiEndpoint           string              `json:"geminiEndpoint"`
+	GeminiEmbeddingModelID   string              `json:"geminiEmbeddingModel"`
+	GeminiEmbeddingDimension *int                `json:"geminiEmbeddingDimension"`
+	OpenAICodexEndpoint      string              `json:"openAICodexEndpoint"`
+	OpenAICodexAuthBaseURL   string              `json:"openAICodexAuthBaseURL"`
+	OpenAICodexClientID      string              `json:"openAICodexClientID"`
+	OpenAICodexOriginator    string              `json:"openAICodexOriginator"`
+	OpenAICodexRedirectURL   string              `json:"openAICodexRedirectURL"`
+	Telegram                 fileTelegramConfig  `json:"telegram"`
+	Slack                    fileSlackConfig     `json:"slack"`
+	Heartbeat                fileHeartbeatConfig `json:"heartbeat"`
+	Log                      fileLogConfig       `json:"log"`
+	Chat                     fileChatConfig      `json:"chat"`
+	Session                  fileSessionConfig   `json:"session"`
+	Prompt                   filePromptConfig    `json:"prompt"`
+	Runtime                  fileRuntimeConfig   `json:"runtime"`
 }
 
 type fileTelegramConfig struct {
@@ -845,15 +872,17 @@ type filePromptConfig struct {
 
 func (f fileConfig) toSource() (Source, error) {
 	source := Source{
-		Provider:               strings.TrimSpace(f.Provider),
-		GeminiAPIKey:           strings.TrimSpace(f.GeminiAPIKey),
-		ModelID:                strings.TrimSpace(f.ModelID),
-		GeminiEndpoint:         strings.TrimSpace(f.GeminiEndpoint),
-		OpenAICodexEndpoint:    strings.TrimSpace(f.OpenAICodexEndpoint),
-		OpenAICodexAuthBaseURL: strings.TrimSpace(f.OpenAICodexAuthBaseURL),
-		OpenAICodexClientID:    strings.TrimSpace(f.OpenAICodexClientID),
-		OpenAICodexOriginator:  strings.TrimSpace(f.OpenAICodexOriginator),
-		OpenAICodexRedirectURL: strings.TrimSpace(f.OpenAICodexRedirectURL),
+		Provider:                 strings.TrimSpace(f.Provider),
+		GeminiAPIKey:             strings.TrimSpace(f.GeminiAPIKey),
+		ModelID:                  strings.TrimSpace(f.ModelID),
+		GeminiEndpoint:           strings.TrimSpace(f.GeminiEndpoint),
+		GeminiEmbeddingModelID:   strings.TrimSpace(f.GeminiEmbeddingModelID),
+		GeminiEmbeddingDimension: f.GeminiEmbeddingDimension,
+		OpenAICodexEndpoint:      strings.TrimSpace(f.OpenAICodexEndpoint),
+		OpenAICodexAuthBaseURL:   strings.TrimSpace(f.OpenAICodexAuthBaseURL),
+		OpenAICodexClientID:      strings.TrimSpace(f.OpenAICodexClientID),
+		OpenAICodexOriginator:    strings.TrimSpace(f.OpenAICodexOriginator),
+		OpenAICodexRedirectURL:   strings.TrimSpace(f.OpenAICodexRedirectURL),
 		Telegram: TelegramConfigSource{
 			BotToken:     strings.TrimSpace(f.Telegram.BotToken),
 			Endpoint:     strings.TrimSpace(f.Telegram.Endpoint),

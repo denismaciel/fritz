@@ -813,9 +813,6 @@ func runTelegram(
 	registry *tool.Registry,
 ) error {
 	_ = out
-	if err := validateProviderAccess(ctx, cwd, cfg); err != nil {
-		return wrapError("config", err)
-	}
 	if err := cfg.ValidateTelegram(); err != nil {
 		return wrapError("config", err)
 	}
@@ -1041,9 +1038,6 @@ func runSlack(
 	registry *tool.Registry,
 ) error {
 	_ = out
-	if err := validateProviderAccess(ctx, cwd, cfg); err != nil {
-		return wrapError("config", err)
-	}
 	if err := cfg.ValidateSlack(); err != nil {
 		return wrapError("config", err)
 	}

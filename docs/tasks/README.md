@@ -7,9 +7,11 @@ This directory groups longer-running work into themed packs. Each pack has an `I
 - [`agent-stream-api/`](agent-stream-api/INDEX.md) — expose the runtime as a multi-client agent API over AG-UI SSE
 - [`context-compaction-parity/`](context-compaction-parity/INDEX.md) — bring local compaction closer to `openai/codex` in small, testable steps
 - [`embedded-go-terminal-ui/`](embedded-go-terminal-ui/INDEX.md) — build the default in-process Go terminal UI
+- [`embedded-memory-palace/`](embedded-memory-palace/INDEX.md) — build a first in-process SQLite + FTS5 + sqlite-vec + Ollama memory stack behind promotable interfaces
 - [`gateway-heartbeat/`](gateway-heartbeat/INDEX.md) — add heartbeat wake/scheduling behavior to the gateway wrapper
 - [`gateway-state-memory/`](gateway-state-memory/INDEX.md) — separate gateway ops state from durable memory files
 - [`imperative-shell-functional-core/`](imperative-shell-functional-core/INDEX.md) — push IO to the edges and move logic into testable core modules
+- [`memory-palace-sync/`](memory-palace-sync/INDEX.md) — evolve the embedded memory stack to canonical entries, per-source sync state, and content-hash-driven document rebuilds
 - [`openai-codex-subscription-auth/`](openai-codex-subscription-auth/INDEX.md) — add ChatGPT subscription-backed `openai-codex` auth and SSE transport
 - [`pi-sessions/`](pi-sessions/INDEX.md) — map Pi-style session storage, replay, resume, fork, and compaction into Go
 - [`pi-tool-parity/`](pi-tool-parity/INDEX.md) — port Pi tool behavior using exact Pi test names as guardrails
