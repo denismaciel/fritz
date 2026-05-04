@@ -68,6 +68,7 @@ func Run(ctx context.Context, in io.Reader, out io.Writer, runtime *agent.Runtim
 		tea.WithInput(in),
 		tea.WithOutput(out),
 		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
 	)
 	_, err := program.Run()
 	return err
@@ -126,7 +127,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input.SetValue("")
 			m.pendingImgs = nil
 			m.resizeInput()
-			m.syncViewport()
+			m.syncViewportAtBottom()
 			handle, err := m.runtime.Submit(context.Background(), agent.RunRequest{Prompt: text, Images: images})
 			if err != nil {
 				return m, sendMsg(runErrMsg{err: err})
@@ -142,15 +143,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+l":
 			m.runtime.Reset()
 			m.state = NewState()
-			m.syncViewport()
+			m.syncViewportAtBottom()
 			return m, nil
 		case "pgup":
-			m.viewport.HalfViewUp()
+			m.viewport.PageUp()
 			return m, nil
 		case "pgdown":
-			m.viewport.HalfViewDown()
+			m.viewport.PageDown()
 			return m, nil
 		}
+	case tea.MouseMsg:
+		var viewportCmd tea.Cmd
+		m.viewport, viewportCmd = m.viewport.Update(msg)
+		return m, viewportCmd
 	case agentEventMsg:
 		m.state = m.state.Apply(msg.event)
 		m.syncViewport()
@@ -213,6 +218,14 @@ func (m Model) View() string {
 }
 
 func (m *Model) syncViewport() {
+	m.syncViewportWithFollow(m.viewport.AtBottom())
+}
+
+func (m *Model) syncViewportAtBottom() {
+	m.syncViewportWithFollow(true)
+}
+
+func (m *Model) syncViewportWithFollow(followBottom bool) {
 	if m.viewport.Width == 0 {
 		return
 	}
@@ -221,7 +234,9 @@ func (m *Model) syncViewport() {
 		lines = append(lines, renderItem(item, m.viewport.Width))
 	}
 	m.viewport.SetContent(strings.Join(lines, "\n\n"))
-	m.viewport.GotoBottom()
+	if followBottom {
+		m.viewport.GotoBottom()
+	}
 }
 
 func (m *Model) resizeInput() {

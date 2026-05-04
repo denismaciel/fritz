@@ -2,12 +2,14 @@ package terminalui
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 
 	"fritz/internal/agent"
 	"fritz/internal/tool"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -136,4 +138,96 @@ func TestRenderItemLeavesNonDiffToolPreviewUnstyled(t *testing.T) {
 			t.Fatalf("rendered = %q missing %q", plain, want)
 		}
 	}
+}
+
+func TestSyncViewportFollowsWhenAtBottom(t *testing.T) {
+	model := modelWithTranscript(8)
+	model.viewport.GotoBottom()
+	before := model.viewport.YOffset
+
+	model.state = model.state.AddUserPrompt("new line")
+	model.syncViewport()
+
+	if model.viewport.YOffset <= before {
+		t.Fatalf("YOffset = %d, want greater than %d", model.viewport.YOffset, before)
+	}
+	if !model.viewport.AtBottom() {
+		t.Fatalf("viewport should stay at bottom, YOffset = %d", model.viewport.YOffset)
+	}
+}
+
+func TestSyncViewportPreservesManualScrollDuringUpdates(t *testing.T) {
+	model := modelWithTranscript(12)
+	model.viewport.GotoBottom()
+	model.viewport.PageUp()
+	before := model.viewport.YOffset
+
+	model.state = model.state.AddUserPrompt("new line")
+	model.syncViewport()
+
+	if model.viewport.YOffset != before {
+		t.Fatalf("YOffset = %d, want %d", model.viewport.YOffset, before)
+	}
+	if model.viewport.AtBottom() {
+		t.Fatal("viewport should remain pinned above bottom")
+	}
+}
+
+func TestPageKeysScrollTranscript(t *testing.T) {
+	model := modelWithTranscript(12)
+	model.viewport.GotoBottom()
+	before := model.viewport.YOffset
+
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	model = updated.(Model)
+
+	if model.viewport.YOffset >= before {
+		t.Fatalf("pgup YOffset = %d, want less than %d", model.viewport.YOffset, before)
+	}
+
+	updated, _ = model.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	model = updated.(Model)
+
+	if model.viewport.YOffset <= 0 {
+		t.Fatalf("pgdown YOffset = %d, want positive", model.viewport.YOffset)
+	}
+}
+
+func TestMouseWheelScrollsTranscript(t *testing.T) {
+	model := modelWithTranscript(12)
+	model.viewport.GotoBottom()
+	before := model.viewport.YOffset
+
+	updated, _ := model.Update(tea.MouseMsg{
+		Type:   tea.MouseWheelUp,
+		Button: tea.MouseButtonWheelUp,
+		Action: tea.MouseActionPress,
+	})
+	model = updated.(Model)
+
+	if model.viewport.YOffset >= before {
+		t.Fatalf("wheel up YOffset = %d, want less than %d", model.viewport.YOffset, before)
+	}
+
+	updated, _ = model.Update(tea.MouseMsg{
+		Type:   tea.MouseWheelDown,
+		Button: tea.MouseButtonWheelDown,
+		Action: tea.MouseActionPress,
+	})
+	model = updated.(Model)
+
+	if model.viewport.YOffset <= 0 {
+		t.Fatalf("wheel down YOffset = %d, want positive", model.viewport.YOffset)
+	}
+}
+
+func modelWithTranscript(items int) Model {
+	model := NewModel(nil)
+	model.viewport.Width = 40
+	model.viewport.Height = 4
+	for i := range items {
+		model.state = model.state.AddUserPrompt(fmt.Sprintf("line %02d", i+1))
+	}
+	model.syncViewportAtBottom()
+	return model
 }
