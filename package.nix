@@ -1,7 +1,9 @@
 {
   buildGoModule,
   lib,
+  makeWrapper,
   pkg-config,
+  ripgrep,
   sqlite,
   pname ? "fritz",
   subPackage ? "cmd/fritz",
@@ -15,10 +17,12 @@ buildGoModule {
 
   subPackages = [ subPackage ];
 
-  nativeBuildInputs = [ pkg-config ];
+  nativeBuildInputs = [
+    makeWrapper
+    pkg-config
+  ];
   buildInputs = [ sqlite ];
 
-  CGO_ENABLED = "1";
   CGO_CFLAGS = "-I${sqlite.dev}/include";
   CGO_LDFLAGS = "-L${sqlite.out}/lib";
 
@@ -30,6 +34,11 @@ buildGoModule {
     "-s"
     "-w"
   ];
+
+  postInstall = ''
+    wrapProgram "$out/bin/${mainProgram}" \
+      --prefix PATH : ${lib.makeBinPath [ ripgrep ]}
+  '';
 
   meta = with lib; {
     description = "Fritz CLI coding agent";

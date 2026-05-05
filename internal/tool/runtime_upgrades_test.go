@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -260,8 +261,28 @@ func TestBashRuntimeUpgrades(t *testing.T) {
 		if _, statErr := os.Stat(details.FullOutputPath); statErr != nil {
 			t.Fatalf("Stat() error = %v", statErr)
 		}
+		if strings.HasPrefix(details.FullOutputPath, dir+string(filepath.Separator)) {
+			t.Fatalf("spill file should not be under workspace: %q", details.FullOutputPath)
+		}
 		if !strings.Contains(result.Text(), "output truncated") {
 			t.Fatalf("text = %q", result.Text())
+		}
+	})
+
+	t.Run("bash spill dir avoids workspace temp directories", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("unix temp fallback expectation")
+		}
+		dir := t.TempDir()
+		workspaceTmp := filepath.Join(dir, "tmp")
+		if err := os.MkdirAll(workspaceTmp, 0o755); err != nil {
+			t.Fatalf("MkdirAll() error = %v", err)
+		}
+		t.Setenv("TMPDIR", workspaceTmp)
+
+		spillDir := defaultBashSpillDir(dir)
+		if strings.HasPrefix(spillDir, dir+string(filepath.Separator)) {
+			t.Fatalf("spill dir should not be under workspace: %q", spillDir)
 		}
 	})
 

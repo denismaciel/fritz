@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -24,6 +26,7 @@ type bashTool struct {
 	commandPrefix  string
 	defaultTimeout time.Duration
 	outputMaxBytes int
+	spillDir       string
 }
 
 type BashExecOptions struct {
@@ -72,6 +75,12 @@ func WithDefaultTimeout(timeout time.Duration) BashToolOption {
 func WithOutputMaxBytes(maxBytes int) BashToolOption {
 	return func(t *bashTool) {
 		t.outputMaxBytes = maxBytes
+	}
+}
+
+func WithBashSpillDir(spillDir string) BashToolOption {
+	return func(t *bashTool) {
+		t.spillDir = spillDir
 	}
 }
 
@@ -134,7 +143,7 @@ func (t bashTool) Run(ctx context.Context, call Call) (Result, error) {
 	execResult, err := t.operations.Exec(ctx, command, t.root, BashExecOptions{
 		Timeout:  timeout,
 		MaxBytes: t.outputMaxBytes,
-		SpillDir: t.root,
+		SpillDir: t.resolvedSpillDir(),
 	})
 	if err != nil {
 		result := ErrorTextResult(call, err)
@@ -167,6 +176,45 @@ func (t bashTool) Run(ctx context.Context, call Call) (Result, error) {
 			FullOutputPath: execResult.FullOutputPath,
 		},
 	}, nil
+}
+
+func (t bashTool) resolvedSpillDir() string {
+	spillDir := strings.TrimSpace(t.spillDir)
+	if spillDir != "" {
+		return spillDir
+	}
+	return defaultBashSpillDir(t.root)
+}
+
+func defaultBashSpillDir(root string) string {
+	spillDir := filepath.Join(os.TempDir(), "fritz-spills")
+	if !pathWithin(root, spillDir) {
+		return spillDir
+	}
+	if runtime.GOOS != "windows" {
+		return "/tmp/fritz-spills"
+	}
+	return ""
+}
+
+func pathWithin(root string, path string) bool {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return false
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absRoot, absPath)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 func (o localBashOperations) Exec(ctx context.Context, command string, cwd string, options BashExecOptions) (BashExecResult, error) {
@@ -312,6 +360,9 @@ func newOutputSink(maxBytes int, spillDir string) (*outputSink, error) {
 	}
 	if spillDir == "" {
 		spillDir = os.TempDir()
+	}
+	if err := os.MkdirAll(spillDir, 0o700); err != nil {
+		return nil, err
 	}
 	return &outputSink{maxBytes: maxBytes, spillDir: spillDir}, nil
 }
