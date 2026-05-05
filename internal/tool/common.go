@@ -121,17 +121,6 @@ func collectSearchFiles(ops FileOperations, path string) ([]string, error) {
 	return files, err
 }
 
-func formatSearchPath(file string, root string, isDir bool) string {
-	if !isDir {
-		return filepath.Base(file)
-	}
-	rel, err := filepath.Rel(root, file)
-	if err != nil {
-		return filepath.Base(file)
-	}
-	return filepath.ToSlash(rel)
-}
-
 func buildPatternMatcher(pattern string, literal bool, ignoreCase bool) (func(string) bool, error) {
 	if literal {
 		if ignoreCase {

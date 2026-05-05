@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -176,7 +177,7 @@ func TestDiscoveryHardening(t *testing.T) {
 		}
 	})
 
-	t.Run("grep supports glob filter", func(t *testing.T) {
+	t.Run("go grep supports glob filter", func(t *testing.T) {
 		dir := t.TempDir()
 		if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("needle\n"), 0o644); err != nil {
 			t.Fatalf("WriteFile() error = %v", err)
@@ -185,7 +186,7 @@ func TestDiscoveryHardening(t *testing.T) {
 			t.Fatalf("WriteFile() error = %v", err)
 		}
 
-		result, err := NewGrepTool(dir).Run(context.Background(), Call{
+		result, err := NewGrepTool(dir, WithGrepBackend(GrepBackendGo)).Run(context.Background(), Call{
 			ID:   "call-1",
 			Name: "grep",
 			Args: map[string]any{"pattern": "needle", "glob": "*.md"},
@@ -195,6 +196,48 @@ func TestDiscoveryHardening(t *testing.T) {
 		}
 		if !strings.Contains(result.Text(), "a.md") || strings.Contains(result.Text(), "b.txt") {
 			t.Fatalf("unexpected grep output: %q", result.Text())
+		}
+	})
+
+	t.Run("ripgrep backend fails when rg is unavailable", func(t *testing.T) {
+		dir := t.TempDir()
+		result, err := NewGrepTool(dir, WithRipgrepPath(filepath.Join(dir, "missing-rg"))).Run(context.Background(), Call{
+			ID:   "call-1",
+			Name: "grep",
+			Args: map[string]any{"pattern": "needle"},
+		})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !result.IsError || !strings.Contains(result.Text(), "Failed to run ripgrep") {
+			t.Fatalf("result = %#v text = %q", result, result.Text())
+		}
+	})
+
+	t.Run("ripgrep backend matches pi limit notice", func(t *testing.T) {
+		if _, err := exec.LookPath("rg"); err != nil {
+			t.Skip("rg not available")
+		}
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "ctx.txt"), []byte("before\nmatch one\nafter\nmatch two\n"), 0o644); err != nil {
+			t.Fatalf("WriteFile() error = %v", err)
+		}
+		result, err := NewGrepTool(dir).Run(context.Background(), Call{
+			ID:   "call-1",
+			Name: "grep",
+			Args: map[string]any{"pattern": "match", "context": 1, "limit": 1},
+		})
+		if err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		if !strings.Contains(result.Text(), "ctx.txt-1- before") || !strings.Contains(result.Text(), "ctx.txt:2: match one") {
+			t.Fatalf("missing context output: %q", result.Text())
+		}
+		if !strings.Contains(result.Text(), "[1 matches limit reached. Use limit=2 for more, or refine pattern]") {
+			t.Fatalf("missing pi limit notice: %q", result.Text())
+		}
+		if strings.Contains(result.Text(), "match two") {
+			t.Fatalf("unexpected second match: %q", result.Text())
 		}
 	})
 }

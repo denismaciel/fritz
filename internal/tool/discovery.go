@@ -10,9 +10,18 @@ import (
 	"strings"
 )
 
+type GrepBackend string
+
+const (
+	GrepBackendRipgrep GrepBackend = "ripgrep"
+	GrepBackendGo      GrepBackend = "go"
+)
+
 type grepTool struct {
-	root string
-	ops  FileOperations
+	root    string
+	ops     FileOperations
+	backend GrepBackend
+	rgPath  string
 }
 
 type findTool struct {
@@ -28,7 +37,9 @@ type lsTool struct {
 type DiscoveryToolOption func(*discoveryToolOptions)
 
 type discoveryToolOptions struct {
-	ops FileOperations
+	ops         FileOperations
+	grepBackend GrepBackend
+	rgPath      string
 }
 
 func WithDiscoveryFileOperations(ops FileOperations) DiscoveryToolOption {
@@ -37,8 +48,20 @@ func WithDiscoveryFileOperations(ops FileOperations) DiscoveryToolOption {
 	}
 }
 
+func WithGrepBackend(backend GrepBackend) DiscoveryToolOption {
+	return func(o *discoveryToolOptions) {
+		o.grepBackend = backend
+	}
+}
+
+func WithRipgrepPath(path string) DiscoveryToolOption {
+	return func(o *discoveryToolOptions) {
+		o.rgPath = path
+	}
+}
+
 func newDiscoveryToolOptions(options []DiscoveryToolOption) discoveryToolOptions {
-	out := discoveryToolOptions{ops: CreateLocalFileOperations()}
+	out := discoveryToolOptions{ops: CreateLocalFileOperations(), grepBackend: GrepBackendRipgrep}
 	for _, option := range options {
 		option(&out)
 	}
@@ -47,7 +70,7 @@ func newDiscoveryToolOptions(options []DiscoveryToolOption) discoveryToolOptions
 
 func NewGrepTool(root string, options ...DiscoveryToolOption) Tool {
 	cfg := newDiscoveryToolOptions(options)
-	return grepTool{root: root, ops: cfg.ops}
+	return grepTool{root: root, ops: cfg.ops, backend: cfg.grepBackend, rgPath: cfg.rgPath}
 }
 
 func NewFindTool(root string, options ...DiscoveryToolOption) Tool {
@@ -84,7 +107,7 @@ func (t grepTool) Definition() Definition {
 	}
 }
 
-func (t grepTool) Run(_ context.Context, call Call) (Result, error) {
+func (t grepTool) Run(ctx context.Context, call Call) (Result, error) {
 	pattern, ok := call.Args["pattern"].(string)
 	if !ok || pattern == "" {
 		err := errors.New("missing required arg: pattern")
@@ -98,110 +121,10 @@ func (t grepTool) Run(_ context.Context, call Call) (Result, error) {
 	if err != nil {
 		return errResult, err
 	}
-	contextLines := intArg(call.Args["context"])
-	limit := intArg(call.Args["limit"])
-	if limit <= 0 {
-		limit = DefaultGrepLimit
+	if t.backend == GrepBackendGo {
+		return t.runGoGrep(call, resolved)
 	}
-	ignoreCase := boolArg(call.Args["ignoreCase"])
-	literal := boolArg(call.Args["literal"])
-
-	files, err := collectSearchFiles(t.ops, resolved)
-	if err != nil {
-		return errorResult(call, err), err
-	}
-	isDir := true
-	if info, statErr := t.ops.Stat(resolved); statErr == nil {
-		isDir = info.IsDir()
-	}
-	fileGlob := stringValue(call.Args["glob"])
-
-	matcher, err := buildPatternMatcher(pattern, literal, ignoreCase)
-	if err != nil {
-		return errorResult(call, err), err
-	}
-
-	var outputLines []string
-	matchCount := 0
-	linesTruncated := false
-	for _, file := range files {
-		displayPath := formatSearchPath(file, resolved, isDir)
-		if fileGlob != "" && !globMatch(fileGlob, displayPath) {
-			continue
-		}
-		data, readErr := t.ops.ReadFile(file)
-		if readErr != nil {
-			continue
-		}
-		lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
-		for i, line := range lines {
-			if !matcher(line) {
-				continue
-			}
-			matchCount++
-			start := i
-			if contextLines > 0 {
-				start = max(0, i-contextLines)
-			}
-			end := i
-			if contextLines > 0 {
-				end = min(len(lines)-1, i+contextLines)
-			}
-			for current := start; current <= end; current++ {
-				truncated, wasTruncated := TruncateLine(lines[current], GrepMaxLineLength)
-				linesTruncated = linesTruncated || wasTruncated
-				if current == i {
-					outputLines = append(outputLines, fmt.Sprintf("%s:%d: %s", displayPath, current+1, truncated))
-				} else {
-					outputLines = append(outputLines, fmt.Sprintf("%s-%d- %s", displayPath, current+1, truncated))
-				}
-			}
-			if matchCount >= limit {
-				break
-			}
-		}
-		if matchCount >= limit {
-			break
-		}
-	}
-	if matchCount == 0 {
-		return TextResult(call, "No matches found"), nil
-	}
-
-	rawOutput := strings.Join(outputLines, "\n")
-	truncation := TruncateHead(rawOutput, TruncationOptions{MaxLines: 1 << 20})
-	output := truncation.Content
-	var details *GrepResultDetails
-	var notices []string
-	if matchCount >= limit {
-		if details == nil {
-			details = &GrepResultDetails{}
-		}
-		details.MatchLimitReached = limit
-		notices = append(notices, fmt.Sprintf("%d matches limit reached", limit))
-	}
-	if truncation.Truncated {
-		if details == nil {
-			details = &GrepResultDetails{}
-		}
-		details.Truncation = &truncation
-		notices = append(notices, fmt.Sprintf("%s limit reached", FormatSize(DefaultMaxBytes)))
-	}
-	if linesTruncated {
-		if details == nil {
-			details = &GrepResultDetails{}
-		}
-		details.LinesTruncated = true
-		notices = append(notices, "some lines truncated")
-	}
-	if len(notices) > 0 {
-		output += "\n\n[" + strings.Join(notices, ". ") + "]"
-	}
-	var resultDetails any
-	if details != nil {
-		resultDetails = details
-	}
-	return Result{CallID: call.ID, Name: call.Name, Parts: []ContentPart{TextPart(output)}, Details: resultDetails}, nil
+	return t.runRipgrep(ctx, call, resolved)
 }
 
 func (t findTool) Definition() Definition {

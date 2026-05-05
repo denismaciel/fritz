@@ -152,7 +152,7 @@ func TestDiscoveryToolParity(t *testing.T) {
 		if err := os.WriteFile(path, []byte("hello pattern\n"), 0o644); err != nil {
 			t.Fatalf("WriteFile() error = %v", err)
 		}
-		result, err := NewGrepTool(dir).Run(context.Background(), Call{
+		result, err := NewGrepTool(dir, WithGrepBackend(GrepBackendGo)).Run(context.Background(), Call{
 			ID:   "call-1",
 			Name: "grep",
 			Args: map[string]any{"pattern": "pattern", "path": "one.txt"},
@@ -171,7 +171,7 @@ func TestDiscoveryToolParity(t *testing.T) {
 		if err := os.WriteFile(path, []byte("a\nmatch one\nc\nmatch two\ne\n"), 0o644); err != nil {
 			t.Fatalf("WriteFile() error = %v", err)
 		}
-		result, err := NewGrepTool(dir).Run(context.Background(), Call{
+		result, err := NewGrepTool(dir, WithGrepBackend(GrepBackendGo)).Run(context.Background(), Call{
 			ID:   "call-1",
 			Name: "grep",
 			Args: map[string]any{"pattern": "match", "path": ".", "context": 1, "limit": 1},
