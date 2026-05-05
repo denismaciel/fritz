@@ -243,10 +243,16 @@ type functionDeclaration struct {
 
 type apiPart struct {
 	Text             string               `json:"text,omitempty"`
+	InlineData       *apiInlineData       `json:"inline_data,omitempty"`
 	Thought          bool                 `json:"thought,omitempty"`
 	FunctionCall     *apiFunctionCall     `json:"functionCall,omitempty"`
 	FunctionResponse *apiFunctionResponse `json:"functionResponse,omitempty"`
 	ThoughtSignature string               `json:"thoughtSignature,omitempty"`
+}
+
+type apiInlineData struct {
+	MIMEType string `json:"mime_type"`
+	Data     string `json:"data"`
 }
 
 type apiFunctionCall struct {
@@ -283,6 +289,12 @@ func buildRequest(req model.Request) requestBody {
 				Text:             part.Text,
 				Thought:          part.Thought,
 				ThoughtSignature: part.ThoughtSignature,
+			}
+			if part.ImageData != "" {
+				api.InlineData = &apiInlineData{
+					MIMEType: part.ImageMIMEType,
+					Data:     part.ImageData,
+				}
 			}
 			if part.ToolCall != nil {
 				api.FunctionCall = &apiFunctionCall{

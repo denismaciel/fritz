@@ -90,6 +90,55 @@ func TestClientGenerate(t *testing.T) {
 	}
 }
 
+func TestClientGenerateWithImage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+
+		contents, _ := body["contents"].([]any)
+		msg := contents[0].(map[string]any)
+		parts := msg["parts"].([]any)
+
+		foundImage := false
+		for _, p := range parts {
+			part := p.(map[string]any)
+			if inlineData, ok := part["inline_data"].(map[string]any); ok {
+				if inlineData["mime_type"] == "image/png" && inlineData["data"] == "base64data" {
+					foundImage = true
+				}
+			}
+		}
+		if !foundImage {
+			t.Fatalf("image part not found or incorrect: %#v", parts)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"I see a png"}]}}]}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithEndpoint(server.URL), WithHTTPClient(server.Client()))
+	resp, err := client.Generate(context.Background(), model.Request{
+		Messages: []model.Message{
+			{
+				Role: model.UserRole,
+				Parts: []model.Part{
+					{Text: "what is this?"},
+					{ImageData: "base64data", ImageMIMEType: "image/png"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if resp.Text != "I see a png" {
+		t.Fatalf("resp.Text = %q", resp.Text)
+	}
+}
+
 func TestClientGenerateNoText(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
