@@ -18,6 +18,10 @@ buildGoModule {
   nativeBuildInputs = [ pkg-config ];
   buildInputs = [ sqlite ];
 
+  CGO_ENABLED = "1";
+  CGO_CFLAGS = "-I${sqlite.dev}/include";
+  CGO_LDFLAGS = "-L${sqlite.out}/lib";
+
   tags = [ "sqlite_fts5" ];
 
   vendorHash = "sha256-hSA5DOn/L99ZiuCpadQABp0bLs/+ktLJSeLWGP3T8CA=";

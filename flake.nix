@@ -69,6 +69,12 @@
               pkg-config
               sqlite
             ];
+
+            CGO_ENABLED = "1";
+            CGO_CFLAGS = "-I${pkgs.sqlite.dev}/include";
+            CGO_LDFLAGS = "-L${pkgs.sqlite.out}/lib";
+            GOFLAGS = "-tags=sqlite_fts5";
+            PKG_CONFIG_PATH = "${pkgs.sqlite.dev}/lib/pkgconfig";
           };
         }
       );
