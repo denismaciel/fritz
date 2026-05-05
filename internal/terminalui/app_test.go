@@ -101,7 +101,8 @@ func TestViewShowsRunningStateAlongsideModel(t *testing.T) {
 	model.activeRunID = "run-1"
 
 	view := model.View()
-	if !strings.Contains(view, "Model: gemini-test | Running...") {
+	// The first spinner frame is ⠋
+	if !strings.Contains(ansi.Strip(view), "Model: gemini-test | ⠋") {
 		t.Fatalf("view = %q", view)
 	}
 }

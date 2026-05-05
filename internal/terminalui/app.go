@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"fritz/internal/agent"
 	"fritz/internal/brand"
@@ -21,6 +22,14 @@ import (
 type agentEventMsg struct{ event agent.Event }
 type runDoneMsg struct{ result agent.RunResult }
 type runErrMsg struct{ err error }
+type tickMsg time.Time
+
+func tick() tea.Cmd {
+	return tea.Tick(time.Millisecond*32, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
+
 type pasteClipboardResultMsg struct {
 	result clipboardPasteResult
 	err    error
@@ -75,11 +84,13 @@ func Run(ctx context.Context, in io.Reader, out io.Writer, runtime *agent.Runtim
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return tick()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tickMsg:
+		return m, tick()
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -201,7 +212,7 @@ func (m Model) View() string {
 		footerText = "Model: " + m.runtime.ModelID()
 	}
 	if m.activeRunID != "" {
-		footerText += " | Running..."
+		footerText += " | " + ActivityIndicator(time.Now())
 	}
 	footer := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(footerText)
 	inputBox := lipgloss.NewStyle().
