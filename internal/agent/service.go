@@ -75,17 +75,19 @@ type RunHandle struct {
 }
 
 type RuntimeOptions struct {
-	Session session.StartOptions
+	Session   session.StartOptions
+	Workspace tool.WorkspaceConfig
 }
 
 type ClientFactory func(cfg config.Runtime) model.Client
 type RegistryFactory func(cfg config.Runtime) *tool.Registry
+type WorkspaceRegistryFactory func(cfg config.Runtime, workspace tool.WorkspaceConfig) *tool.Registry
 
 type Service struct {
 	cwd         string
 	cfg         config.Runtime
 	newClient   ClientFactory
-	newRegistry RegistryFactory
+	newRegistry WorkspaceRegistryFactory
 	profile     prompt.Profile
 
 	runSeq atomic.Uint64
@@ -98,9 +100,23 @@ func NewService(cwd string, cfg config.Runtime, newClient ClientFactory, newRegi
 	return NewServiceWithPromptProfile(cwd, cfg, newClient, newRegistry, prompt.ProfileCoding)
 }
 
+func NewServiceWithWorkspaceRegistry(cwd string, cfg config.Runtime, newClient ClientFactory, newRegistry WorkspaceRegistryFactory) *Service {
+	return NewServiceWithWorkspaceRegistryAndPromptProfile(cwd, cfg, newClient, newRegistry, prompt.ProfileCoding)
+}
+
 func NewServiceWithPromptProfile(cwd string, cfg config.Runtime, newClient ClientFactory, newRegistry RegistryFactory, profile prompt.Profile) *Service {
+	workspaceRegistry := func(cfg config.Runtime, _ tool.WorkspaceConfig) *tool.Registry {
+		if newRegistry == nil {
+			return tool.NewRegistry()
+		}
+		return newRegistry(cfg)
+	}
+	return NewServiceWithWorkspaceRegistryAndPromptProfile(cwd, cfg, newClient, workspaceRegistry, profile)
+}
+
+func NewServiceWithWorkspaceRegistryAndPromptProfile(cwd string, cfg config.Runtime, newClient ClientFactory, newRegistry WorkspaceRegistryFactory, profile prompt.Profile) *Service {
 	if newRegistry == nil {
-		newRegistry = func(config.Runtime) *tool.Registry {
+		newRegistry = func(config.Runtime, tool.WorkspaceConfig) *tool.Registry {
 			return tool.NewRegistry()
 		}
 	}
@@ -141,7 +157,7 @@ func (s *Service) NewRuntime(ctx context.Context, options RuntimeOptions) (*Runt
 		cwd:           s.cwd,
 		cfg:           s.cfg,
 		promptRuntime: promptRuntime,
-		registry:      s.newRegistry(s.cfg),
+		registry:      s.newRegistry(s.cfg, options.Workspace),
 		manager:       sessionRuntime.Manager,
 		state:         sessionRuntime.State,
 	}, nil

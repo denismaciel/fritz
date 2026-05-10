@@ -42,6 +42,7 @@ type SessionOptions struct {
 	ForkPath    string
 	NoSession   bool
 	NewSession  bool
+	Workspace   tool.WorkspaceConfig
 }
 
 type Run struct {
@@ -64,6 +65,7 @@ type Service interface {
 
 type ClientFactory = agent.ClientFactory
 type RegistryFactory = agent.RegistryFactory
+type WorkspaceRegistryFactory = agent.WorkspaceRegistryFactory
 
 type LocalService struct {
 	base *agent.Service
@@ -80,6 +82,17 @@ func NewLocalService(
 	}
 }
 
+func NewLocalServiceWithWorkspaceRegistry(
+	cwd string,
+	cfg config.Runtime,
+	newClient ClientFactory,
+	newRegistry WorkspaceRegistryFactory,
+) *LocalService {
+	return &LocalService{
+		base: agent.NewServiceWithWorkspaceRegistry(cwd, cfg, newClient, newRegistry),
+	}
+}
+
 func WrapService(base *agent.Service) *LocalService {
 	return &LocalService{base: base}
 }
@@ -93,6 +106,7 @@ func (s *LocalService) Start(ctx context.Context, options SessionOptions) (Sessi
 			NoSession:   options.NoSession,
 			NewSession:  options.NewSession,
 		},
+		Workspace: options.Workspace,
 	})
 	if err != nil {
 		return nil, err

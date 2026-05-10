@@ -33,6 +33,7 @@ type BashExecOptions struct {
 	Timeout    time.Duration
 	MaxBytes   int
 	SpillDir   string
+	Env        map[string]string
 	OnOutput   func(string) error
 	LineBuffer bool
 }
@@ -231,6 +232,9 @@ func (o localBashOperations) Exec(ctx context.Context, command string, cwd strin
 
 	cmd := exec.Command("sh", "-lc", command)
 	cmd.Dir = cwd
+	if options.Env != nil {
+		cmd.Env = envMapToList(options.Env)
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := cmd.StdoutPipe()
@@ -336,6 +340,17 @@ func (o localBashOperations) Exec(ctx context.Context, command string, cwd strin
 		return result, waitErr
 	}
 	return result, nil
+}
+
+func envMapToList(env map[string]string) []string {
+	out := make([]string, 0, len(env))
+	for key, value := range env {
+		if key == "" || strings.Contains(key, "=") {
+			continue
+		}
+		out = append(out, key+"="+value)
+	}
+	return out
 }
 
 func killProcessGroup(process *os.Process) error {

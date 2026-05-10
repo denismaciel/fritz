@@ -33,9 +33,17 @@ type Client = model.Client
 type ClientFactory = engine.ClientFactory
 type Registry = tool.Registry
 type RegistryFactory = engine.RegistryFactory
+type WorkspaceRegistryFactory = engine.WorkspaceRegistryFactory
 type ToolCall = tool.Call
 type ToolResult = tool.Result
 type ToolContentPart = tool.ContentPart
+type WorkspaceConfig = tool.WorkspaceConfig
+type CommandSandbox = tool.CommandSandbox
+
+const (
+	CommandSandboxLocal CommandSandbox = tool.CommandSandboxLocal
+	CommandSandboxFence CommandSandbox = tool.CommandSandboxFence
+)
 
 const (
 	EventRunStarted         = engine.EventRunStarted
@@ -79,7 +87,7 @@ func NewLocalService(
 }
 
 func NewDefaultService(cwd string, cfg Runtime) *LocalService {
-	return engine.NewLocalService(
+	return engine.NewLocalServiceWithWorkspaceRegistry(
 		cwd,
 		cfg,
 		func(cfg Runtime) model.Client {
@@ -101,16 +109,39 @@ func NewDefaultService(cwd string, cfg Runtime) *LocalService {
 				)
 			}
 		},
-		func(cfg Runtime) *tool.Registry {
+		func(cfg Runtime, workspace WorkspaceConfig) *tool.Registry {
 			registry := tool.NewRegistry()
-			registry.Register(tool.NewBashTool(cwd, tool.WithDefaultTimeout(cfg.CommandTimeout)))
-			registry.Register(tool.NewEditTool(cwd, 128*1024))
-			registry.Register(tool.NewFindTool(cwd))
-			registry.Register(tool.NewGrepTool(cwd))
-			registry.Register(tool.NewLsTool(cwd))
-			registry.Register(tool.NewReadTool(cwd, 128*1024))
+			root := cwd
+			var fileOps tool.FileOperations
+			var bashOptions []tool.BashToolOption
+			var discoveryOptions []tool.DiscoveryToolOption
+			if workspace.Enabled() {
+				root = workspace.Root
+				fileOps = tool.NewWorkspaceFileOperations(workspace)
+				bashOptions = append(bashOptions, tool.WithBashSpillDir(workspace.ResolvedSpillDir()))
+				if workspace.CommandSandbox == tool.CommandSandboxFence {
+					bashOptions = append(bashOptions, tool.WithBashOperations(tool.NewFenceBashOperations(workspace)))
+				}
+				discoveryOptions = append(discoveryOptions, tool.WithDiscoveryFileOperations(fileOps), tool.WithGrepBackend(tool.GrepBackendGo))
+			}
+			bashOptions = append(bashOptions, tool.WithDefaultTimeout(cfg.CommandTimeout))
+			registry.Register(tool.NewBashTool(root, bashOptions...))
+			if fileOps != nil {
+				registry.Register(tool.NewEditTool(root, 128*1024, tool.WithEditFileOperations(fileOps)))
+				registry.Register(tool.NewFindTool(root, discoveryOptions...))
+				registry.Register(tool.NewGrepTool(root, discoveryOptions...))
+				registry.Register(tool.NewLsTool(root, discoveryOptions...))
+				registry.Register(tool.NewReadTool(root, 128*1024, tool.WithReadFileOperations(fileOps)))
+				registry.Register(tool.NewWriteTool(root, tool.WithWriteFileOperations(fileOps)))
+			} else {
+				registry.Register(tool.NewEditTool(cwd, 128*1024))
+				registry.Register(tool.NewFindTool(cwd))
+				registry.Register(tool.NewGrepTool(cwd))
+				registry.Register(tool.NewLsTool(cwd))
+				registry.Register(tool.NewReadTool(cwd, 128*1024))
+				registry.Register(tool.NewWriteTool(cwd))
+			}
 			registry.Register(tool.NewWebSearchTool(cfg.GeminiAPIKey, cfg.GeminiEndpoint))
-			registry.Register(tool.NewWriteTool(cwd))
 			return registry
 		},
 	)
