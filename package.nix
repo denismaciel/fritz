@@ -28,7 +28,7 @@ buildGoModule {
 
   tags = [ "sqlite_fts5" ];
 
-  vendorHash = "sha256-hSA5DOn/L99ZiuCpadQABp0bLs/+ktLJSeLWGP3T8CA=";
+  vendorHash = "sha256-r60/QsEA2MyAOS5iScv5DkUWWUB4M2CGP0FmeFbMRrE=";
 
   ldflags = [
     "-s"
