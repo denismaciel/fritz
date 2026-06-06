@@ -22,6 +22,8 @@ import (
 
 const CurrentSessionVersion = 1
 
+const maxSessionLineBytes = 8 * 1024 * 1024
+
 type EntryType string
 
 const (
@@ -740,6 +742,7 @@ func loadLinesFromFile(path string) ([]Line, error) {
 	defer file.Close()
 	var lines []Line
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxSessionLineBytes)
 	for scanner.Scan() {
 		text := strings.TrimSpace(scanner.Text())
 		if text == "" {
@@ -752,7 +755,7 @@ func loadLinesFromFile(path string) ([]Line, error) {
 		lines = append(lines, line)
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load session lines from %s: %w", path, err)
 	}
 	return lines, nil
 }

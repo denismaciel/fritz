@@ -66,6 +66,33 @@ func TestManagerCreateAppendOpen(t *testing.T) {
 	}
 }
 
+func TestOpenAcceptsLargeSessionLine(t *testing.T) {
+	cwd := t.TempDir()
+	manager, err := Create(cwd, ".fritz/sessions")
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	large := strings.Repeat("x", 1024*1024+1)
+	if _, err := manager.AppendPrompt("hi"); err != nil {
+		t.Fatalf("AppendPrompt() error = %v", err)
+	}
+	if _, err := manager.AppendModelResponse(model.Response{
+		Message: model.TextMessage(model.ModelRole, large),
+		Text:    large,
+	}); err != nil {
+		t.Fatalf("AppendModelResponse() error = %v", err)
+	}
+
+	opened, err := Open(manager.SessionFile(), ".fritz/sessions")
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	transcript := opened.BuildContext().Transcript
+	if len(transcript) != 1 || transcript[0].Assistant != large {
+		t.Fatalf("unexpected transcript len=%d assistant_len=%d", len(transcript), len(transcript[0].Assistant))
+	}
+}
+
 func TestManagerBranchTreeAndBranchedSession(t *testing.T) {
 	cwd := t.TempDir()
 	manager, err := Create(cwd, ".fritz/sessions")

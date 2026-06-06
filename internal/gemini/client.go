@@ -463,7 +463,7 @@ func decodeSSE(body io.Reader, emit func(model.StreamEvent) error) (model.Respon
 	}
 
 	if err := scanner.Err(); err != nil {
-		return model.Response{}, err
+		return model.Response{}, fmt.Errorf("decode gemini sse stream: %w", err)
 	}
 	if len(msgParts) == 0 {
 		return model.Response{}, errors.New("gemini response had no parts")

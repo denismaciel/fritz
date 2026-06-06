@@ -64,7 +64,7 @@ func Read(r io.Reader, emit func(Event) error) error {
 		data.WriteByte('\n')
 	}
 	if err := scanner.Err(); err != nil {
-		return err
+		return fmt.Errorf("read sse stream: %w", err)
 	}
 	return flush()
 }

@@ -389,6 +389,7 @@ func runChat(
 	profile prompt.Profile,
 ) error {
 	scanner := bufio.NewScanner(in)
+	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	if cmd.Config.ServerURL != "" {
 		return runRemoteChat(ctx, scanner, out, cmd)
 	}
@@ -448,7 +449,7 @@ func runChat(
 	}
 
 	if err := scanner.Err(); err != nil {
-		return wrapError("input", err)
+		return wrapError("input", fmt.Errorf("read local chat input: %w", err))
 	}
 
 	return nil
@@ -949,7 +950,10 @@ func runRemoteChat(
 			}
 		}
 	}
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read remote chat input: %w", err)
+	}
+	return nil
 }
 
 func sessionOptions(options command.SessionOptions) httpapi.SessionStartOptions {

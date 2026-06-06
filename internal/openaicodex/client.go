@@ -358,7 +358,7 @@ func decodeSSE(body io.Reader, emit func(model.StreamEvent) error) (model.Respon
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return model.Response{}, err
+		return model.Response{}, fmt.Errorf("decode openai codex sse stream: %w", err)
 	}
 	response.Text = textBuf.String()
 	if response.Text == "" {
