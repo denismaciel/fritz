@@ -496,7 +496,8 @@ func (a *Adapter) sendReply(ctx context.Context, chatID string, text string) err
 		return fmt.Errorf("invalid telegram chat id %q", chatID)
 	}
 	return a.client.SendMessage(ctx, SendMessageRequest{
-		ChatID: parsed,
-		Text:   text,
+		ChatID:    parsed,
+		Text:      markdownToTelegramHTML(text),
+		ParseMode: "HTML",
 	})
 }

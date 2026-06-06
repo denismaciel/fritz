@@ -33,8 +33,9 @@ func (s *Sender) Send(ctx context.Context, wake heartbeat.Wake, text string) err
 		Int("text_len", len(strings.TrimSpace(text))).
 		Msg("")
 	err = s.client.SendMessage(ctx, SendMessageRequest{
-		ChatID: chatID,
-		Text:   text,
+		ChatID:    chatID,
+		Text:      markdownToTelegramHTML(text),
+		ParseMode: "HTML",
 	})
 	if err != nil {
 		logger.Error().Err(err).Str("event", "heartbeat.send.error").Str("target_key", wake.TargetKey).Msg("")

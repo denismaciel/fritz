@@ -14,7 +14,7 @@ func TestSenderSendsMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Send() error = %v", err)
 	}
-	if len(client.sent) != 1 || client.sent[0].ChatID != 42 || client.sent[0].Text != "hi" {
+	if len(client.sent) != 1 || client.sent[0].ChatID != 42 || client.sent[0].Text != "hi" || client.sent[0].ParseMode != "HTML" {
 		t.Fatalf("sent = %#v", client.sent)
 	}
 }
