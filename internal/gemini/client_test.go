@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -206,6 +207,19 @@ func TestClientStreamGenerate(t *testing.T) {
 	}
 	if len(reasoning) != 1 || reasoning[0] != "thinking " {
 		t.Fatalf("reasoning = %#v", reasoning)
+	}
+}
+
+func TestDecodeSSEAcceptsLargeDataLine(t *testing.T) {
+	text := strings.Repeat("x", 1024*1024+1)
+	body := "data: " + `{"candidates":[{"content":{"parts":[{"text":` + strconv.Quote(text) + `}]}}]}` + "\n\n"
+
+	resp, err := decodeSSE(strings.NewReader(body), func(model.StreamEvent) error { return nil })
+	if err != nil {
+		t.Fatalf("decodeSSE() error = %v", err)
+	}
+	if resp.Text != text {
+		t.Fatalf("decoded text len = %d, want %d", len(resp.Text), len(text))
 	}
 }
 

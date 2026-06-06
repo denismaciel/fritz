@@ -21,6 +21,7 @@ import (
 const (
 	defaultEndpoint = "https://generativelanguage.googleapis.com"
 	defaultModel    = "gemini-3-flash-preview"
+	maxSSELineBytes = 8 * 1024 * 1024
 )
 
 type Client struct {
@@ -404,7 +405,7 @@ func convertResponse(payload generateContentResponse) (model.Response, error) {
 
 func decodeSSE(body io.Reader, emit func(model.StreamEvent) error) (model.Response, error) {
 	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 0, 4096), 1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxSSELineBytes)
 
 	var finalText strings.Builder
 	var toolCalls []tool.Call
