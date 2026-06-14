@@ -211,7 +211,7 @@ func TestClientStreamGenerate(t *testing.T) {
 }
 
 func TestDecodeSSEAcceptsLargeDataLine(t *testing.T) {
-	text := strings.Repeat("x", 1024*1024+1)
+	text := strings.Repeat("x", 8*1024*1024+1)
 	body := "data: " + `{"candidates":[{"content":{"parts":[{"text":` + strconv.Quote(text) + `}]}}]}` + "\n\n"
 
 	resp, err := decodeSSE(strings.NewReader(body), func(model.StreamEvent) error { return nil })

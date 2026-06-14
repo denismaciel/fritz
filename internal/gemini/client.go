@@ -21,7 +21,7 @@ import (
 const (
 	defaultEndpoint = "https://generativelanguage.googleapis.com"
 	defaultModel    = "gemini-3-flash-preview"
-	maxSSELineBytes = 8 * 1024 * 1024
+	maxSSELineBytes = 64 * 1024 * 1024
 )
 
 type Client struct {
