@@ -36,7 +36,7 @@ type pasteClipboardResultMsg struct {
 }
 
 type Model struct {
-	runtime *agent.Runtime
+	runtime Runtime
 	events  chan tea.Msg
 
 	state       State
@@ -48,7 +48,18 @@ type Model struct {
 	activeRunID string
 }
 
-func NewModel(runtime *agent.Runtime) Model {
+type Runtime interface {
+	Submit(context.Context, agent.RunRequest) (agent.RunHandle, error)
+	Reset()
+	CancelRun(runID string) bool
+	ModelID() string
+}
+
+func NewModel(runtime Runtime) Model {
+	return NewModelWithState(runtime, NewState())
+}
+
+func NewModelWithState(runtime Runtime, state State) Model {
 	input := textarea.New()
 	input.Placeholder = "Type a prompt."
 	input.Focus()
@@ -57,12 +68,13 @@ func NewModel(runtime *agent.Runtime) Model {
 	input.SetHeight(1)
 	input.KeyMap.InsertNewline.SetEnabled(true)
 	_ = input.Cursor.SetMode(cursor.CursorStatic)
+	applyInputStyles(&input)
 
 	vp := viewport.New(80, 20)
 	model := Model{
 		runtime:  runtime,
 		events:   make(chan tea.Msg, 128),
-		state:    NewState(),
+		state:    state,
 		viewport: vp,
 		input:    input,
 	}
@@ -70,8 +82,30 @@ func NewModel(runtime *agent.Runtime) Model {
 	return model
 }
 
-func Run(ctx context.Context, in io.Reader, out io.Writer, runtime *agent.Runtime) error {
-	model := NewModel(runtime)
+func applyInputStyles(input *textarea.Model) {
+	text := lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("15"))
+	placeholder := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Background(lipgloss.Color("15"))
+	prompt := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Background(lipgloss.Color("15"))
+	base := lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("15"))
+	style := textarea.Style{
+		Base:        base,
+		CursorLine:  base,
+		Placeholder: placeholder,
+		Prompt:      prompt,
+		Text:        text,
+	}
+	input.FocusedStyle = style
+	input.BlurredStyle = style
+	input.Cursor.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("0"))
+	input.Cursor.TextStyle = text
+}
+
+func Run(ctx context.Context, in io.Reader, out io.Writer, runtime Runtime) error {
+	return RunWithState(ctx, in, out, runtime, NewState())
+}
+
+func RunWithState(ctx context.Context, in io.Reader, out io.Writer, runtime Runtime, state State) error {
+	model := NewModelWithState(runtime, state)
 	program := tea.NewProgram(model,
 		tea.WithContext(ctx),
 		tea.WithInput(in),
@@ -217,6 +251,8 @@ func (m Model) View() string {
 	footer := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(footerText)
 	inputBox := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
+		Foreground(lipgloss.Color("0")).
+		Background(lipgloss.Color("15")).
 		BorderForeground(lipgloss.Color("8")).
 		Padding(0, 1).
 		Render(renderInputBox(m.input.View(), m.pendingImgs))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"fritz/internal/engine"
 	"fritz/internal/model"
 	"fritz/internal/protocol/sse"
+	"fritz/internal/session"
 	"fritz/internal/tool"
 )
 
@@ -67,6 +69,110 @@ func TestRunsEndpointStreamsAGUI(t *testing.T) {
 	}
 	if kinds[len(kinds)-1] != "RUN_FINISHED" {
 		t.Fatalf("kinds = %#v", kinds)
+	}
+}
+
+func TestRunsEndpointResolvesGatewaySession(t *testing.T) {
+	dir := t.TempDir()
+	manager, err := session.Create(dir, filepath.Join(dir, "sessions"))
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := manager.AppendPrompt("previous"); err != nil {
+		t.Fatalf("AppendPrompt() error = %v", err)
+	}
+	if _, err := manager.AppendModelResponse(model.Response{Message: model.TextMessage(model.ModelRole, "previous"), Text: "previous"}); err != nil {
+		t.Fatalf("AppendModelResponse() error = %v", err)
+	}
+	sessionPath := manager.SessionFile()
+	cfg := testConfig()
+	cfg.Session.Enabled = true
+	cfg.Session.Dir = filepath.Join(dir, "sessions")
+	service := agent.NewService(dir, cfg, func(_ config.Runtime) model.Client {
+		return &testGateway{
+			streamFunc: func(_ context.Context, _ model.Request, emit func(model.StreamEvent) error) (model.Response, error) {
+				_ = emit(model.StreamEvent{TextDelta: "ok"})
+				return model.Response{
+					Message: model.TextMessage(model.ModelRole, "ok"),
+					Text:    "ok",
+				}, nil
+			},
+		}
+	}, func(config.Runtime) *tool.Registry {
+		return tool.NewRegistry()
+	})
+
+	server := httptest.NewServer(NewHandlerWithOptions(engine.WrapService(service), nil, testSessionResolver{
+		"telegram:dm:7": sessionPath,
+	}))
+	defer server.Close()
+
+	resp, err := http.Post(server.URL+"/runs", "application/json", strings.NewReader(`{"prompt":"hi","gatewaySession":"telegram:dm:7"}`))
+	if err != nil {
+		t.Fatalf("Post() error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("StatusCode = %d body=%q", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var sessionPaths []string
+	if err := sse.Read(resp.Body, func(event sse.Event) error {
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(event.Data), &payload); err != nil {
+			return err
+		}
+		if payload["type"] == "RUN_STARTED" {
+			sessionPaths = append(sessionPaths, payload["sessionPath"].(string))
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+	if len(sessionPaths) != 1 || sessionPaths[0] != sessionPath {
+		t.Fatalf("sessionPaths = %#v, want %q", sessionPaths, sessionPath)
+	}
+}
+
+func TestGatewaySessionEndpointReturnsTranscript(t *testing.T) {
+	dir := t.TempDir()
+	manager, err := session.Create(dir, filepath.Join(dir, "sessions"))
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := manager.AppendPrompt("hello"); err != nil {
+		t.Fatalf("AppendPrompt() error = %v", err)
+	}
+	if _, err := manager.AppendModelResponse(model.Response{Message: model.TextMessage(model.ModelRole, "hi"), Text: "hi"}); err != nil {
+		t.Fatalf("AppendModelResponse() error = %v", err)
+	}
+
+	service := agent.NewService(dir, testConfig(), func(_ config.Runtime) model.Client {
+		return &testGateway{}
+	}, func(config.Runtime) *tool.Registry {
+		return tool.NewRegistry()
+	})
+	server := httptest.NewServer(NewHandlerWithOptions(engine.WrapService(service), nil, testSessionResolver{
+		"telegram:dm:7": manager.SessionFile(),
+	}))
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/gateway/session?key=telegram%3Adm%3A7")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("StatusCode = %d body=%q", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var out GatewaySessionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if len(out.Transcript) != 1 || out.Transcript[0].User != "hello" || out.Transcript[0].Assistant != "hi" {
+		t.Fatalf("Transcript = %#v", out.Transcript)
 	}
 }
 
@@ -298,4 +404,10 @@ func assertHasType(t *testing.T, kinds []string, want string) {
 		}
 	}
 	t.Fatalf("types %#v missing %q", kinds, want)
+}
+
+type testSessionResolver map[string]string
+
+func (r testSessionResolver) SessionPathForKey(_ context.Context, key string) (string, error) {
+	return r[key], nil
 }

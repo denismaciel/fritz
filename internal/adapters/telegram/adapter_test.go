@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 
 	"fritz/internal/engine"
 	"fritz/internal/ingress"
+	"fritz/internal/tool"
 	"fritz/internal/transcription"
 )
 
@@ -142,6 +144,102 @@ func TestAdapterPollOnceKeepsCaptionAndTranscriptForVoiceMessage(t *testing.T) {
 	want := "[Audio]\nUser text:\n/remember this\nTranscript:\nvoice transcript"
 	if handler.last.Text != want {
 		t.Fatalf("text = %q", handler.last.Text)
+	}
+}
+
+func TestAdapterPollOnceDownloadsPhotoMessage(t *testing.T) {
+	dir := t.TempDir()
+	client := &fakeClient{
+		updates: []Update{
+			{
+				UpdateID: 3,
+				Message: &Message{
+					Chat:    Chat{ID: 42, Type: "private"},
+					From:    &User{ID: 7},
+					Caption: "what is this?",
+					Photo: []Photo{
+						{FileID: "small"},
+						{FileID: "large"},
+					},
+				},
+			},
+		},
+		filePathByID: map[string]string{
+			"large": "photos/file.png",
+		},
+		fileBodyByPath: map[string][]byte{
+			"photos/file.png": []byte("png-bytes"),
+		},
+	}
+	handler := &captureHandler{}
+	adapter := NewAdapter(filepath.Join(dir, "telegram"), client, handler, Config{
+		PollTimeout:  time.Second,
+		AllowedUsers: []string{"7"},
+	})
+
+	count, err := adapter.PollOnce(context.Background())
+	if err != nil {
+		t.Fatalf("PollOnce() error = %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("count = %d", count)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("calls = %d", handler.calls)
+	}
+	if handler.last.Text != "what is this?" {
+		t.Fatalf("text = %q", handler.last.Text)
+	}
+	if handler.last.Metadata["photo_count"] != "2" || handler.last.Metadata["image_count"] != "1" {
+		t.Fatalf("metadata = %#v", handler.last.Metadata)
+	}
+	if len(handler.last.Images) != 1 {
+		t.Fatalf("images = %#v", handler.last.Images)
+	}
+	image := handler.last.Images[0]
+	if image.Kind != tool.ImagePartKind || image.MIMEType != "image/png" || image.Data != base64.StdEncoding.EncodeToString([]byte("png-bytes")) {
+		t.Fatalf("image = %#v", image)
+	}
+}
+
+func TestAdapterPollOnceHandlesPhotoOnlyMessage(t *testing.T) {
+	dir := t.TempDir()
+	client := &fakeClient{
+		updates: []Update{
+			{
+				UpdateID: 3,
+				Message: &Message{
+					Chat:  Chat{ID: 42, Type: "private"},
+					From:  &User{ID: 7},
+					Photo: []Photo{{FileID: "photo-1"}},
+				},
+			},
+		},
+		filePathByID: map[string]string{
+			"photo-1": "photos/file.jpg",
+		},
+		fileBodyByPath: map[string][]byte{
+			"photos/file.jpg": []byte("jpg-bytes"),
+		},
+	}
+	handler := &captureHandler{}
+	adapter := NewAdapter(filepath.Join(dir, "telegram"), client, handler, Config{
+		PollTimeout:  time.Second,
+		AllowedUsers: []string{"7"},
+	})
+
+	count, err := adapter.PollOnce(context.Background())
+	if err != nil {
+		t.Fatalf("PollOnce() error = %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("count = %d", count)
+	}
+	if handler.last.Text != "[Image]" {
+		t.Fatalf("text = %q", handler.last.Text)
+	}
+	if len(handler.last.Images) != 1 || handler.last.Images[0].MIMEType != "image/jpeg" {
+		t.Fatalf("images = %#v", handler.last.Images)
 	}
 }
 

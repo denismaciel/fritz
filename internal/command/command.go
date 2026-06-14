@@ -48,6 +48,8 @@ type ConfigOptions struct {
 	LogFile                string
 	LogLevel               string
 	ServerURL              string
+	ObserveSocket          string
+	GatewaySession         string
 	ListenAddr             string
 	SessionDir             string
 	ChatHelp               *bool
@@ -93,6 +95,13 @@ type Serve struct {
 }
 
 func (Serve) isCommand() {}
+
+type Attach struct {
+	RunID  string
+	Config ConfigOptions
+}
+
+func (Attach) isCommand() {}
 
 type Telegram struct {
 	PollOnce bool
@@ -150,6 +159,15 @@ func Parse(args []string) (Command, error) {
 		return Chat{Session: session, Config: cfg}, nil
 	case "serve":
 		return Serve{Config: cfg}, nil
+	case "attach":
+		runID := ""
+		if len(remaining) > 1 {
+			runID = strings.TrimSpace(remaining[1])
+		}
+		if len(remaining) > 2 {
+			return nil, fmt.Errorf("unexpected attach arg %q", remaining[2])
+		}
+		return Attach{RunID: runID, Config: cfg}, nil
 	case "telegram":
 		pollOnce, err := parseTelegramArgs(remaining[1:])
 		if err != nil {
@@ -390,6 +408,18 @@ func parseOptions(args []string) (SessionOptions, ConfigOptions, []string, error
 			}
 			i++
 			cfg.ServerURL = args[i]
+		case "--observe-socket":
+			if i+1 >= len(args) {
+				return SessionOptions{}, ConfigOptions{}, nil, errors.New("missing observe socket")
+			}
+			i++
+			cfg.ObserveSocket = args[i]
+		case "--gateway-session":
+			if i+1 >= len(args) {
+				return SessionOptions{}, ConfigOptions{}, nil, errors.New("missing gateway session")
+			}
+			i++
+			cfg.GatewaySession = args[i]
 		case "--listen":
 			if i+1 >= len(args) {
 				return SessionOptions{}, ConfigOptions{}, nil, errors.New("missing listen address")

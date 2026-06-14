@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"fritz/internal/logx"
@@ -133,6 +134,7 @@ func (c *HTTPClient) DownloadFile(ctx context.Context, filePath string) ([]byte,
 	}
 	resp, err := c.client.Do(req)
 	if err != nil {
+		err = redactTelegramError(err)
 		logger := logx.Component("telegram")
 		logger.Error().Err(err).Str("event", "telegram.api.download.error").Str("file_path", strings.TrimSpace(filePath)).Msg("")
 		return nil, err
@@ -168,6 +170,7 @@ func (c *HTTPClient) post(ctx context.Context, method string, payload any, out a
 	request.Header.Set("content-type", "application/json")
 	response, err := c.client.Do(request)
 	if err != nil {
+		err = redactTelegramError(err)
 		logger := logx.Component("telegram")
 		logger.Error().Err(err).Str("event", "telegram.api.error").Str("method", method).Msg("")
 		return err
@@ -198,3 +201,12 @@ func (c *HTTPClient) post(ctx context.Context, method string, payload any, out a
 	logger.Debug().Str("event", "telegram.api.ok").Str("method", method).Msg("")
 	return nil
 }
+
+func redactTelegramError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s", telegramTokenPattern.ReplaceAllString(err.Error(), "${1}REDACTED/"))
+}
+
+var telegramTokenPattern = regexp.MustCompile(`(/(?:file/)?bot)[^/]+/`)

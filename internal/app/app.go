@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"fritz/internal/adapters/slack"
@@ -28,6 +31,7 @@ import (
 	ingressruntime "fritz/internal/ingress"
 	"fritz/internal/logx"
 	"fritz/internal/model"
+	"fritz/internal/observe"
 	"fritz/internal/openaicodex"
 	"fritz/internal/prompt"
 	"fritz/internal/provider"
@@ -181,10 +185,12 @@ func runWithProfile(
 		}
 		defer closeLogger()
 		return runServe(ctx, out, cwd, cmd, cfg, newClient, registry, profile)
-		case command.Telegram:
-			if !allowTelegram {
-				return wrapError("command", errors.New("use fritz-telegram"))
-			}
+	case command.Attach:
+		return runAttach(ctx, out, cwd, cmd)
+	case command.Telegram:
+		if !allowTelegram {
+			return wrapError("command", errors.New("use fritz-telegram"))
+		}
 		cfg, err := resolveRuntimeConfig(cwd, cmd.Config)
 		if err != nil {
 			return wrapError("config", err)
@@ -192,12 +198,12 @@ func runWithProfile(
 		closeLogger, err := configureLogger(cwd, cfg)
 		if err != nil {
 			return wrapError("config", err)
-			}
-			defer closeLogger()
-			return runTelegram(ctx, out, cwd, cmd, cfg, newClient, registry)
-		case command.Slack:
-			return wrapError("command", errors.New("use fritz-slack"))
-		case command.AuthLogin:
+		}
+		defer closeLogger()
+		return runTelegram(ctx, out, cwd, cmd, cfg, newClient, registry)
+	case command.Slack:
+		return wrapError("command", errors.New("use fritz-slack"))
+	case command.AuthLogin:
 		cfg, err := resolveRuntimeConfig(cwd, cmd.Config)
 		if err != nil {
 			return wrapError("config", err)
@@ -343,8 +349,21 @@ func runAgent(
 ) error {
 	if cmd.Config.ServerURL != "" {
 		_, err := httpapi.RenderAGUIRun(ctx, http.DefaultClient, cmd.Config.ServerURL, httpapi.RunRequest{
-			Prompt:  cmd.Prompt,
-			Session: sessionOptions(cmd.Session),
+			Prompt:         cmd.Prompt,
+			Session:        sessionOptions(cmd.Session),
+			GatewaySession: cmd.Config.GatewaySession,
+		}, out)
+		if err != nil {
+			return wrapError("model", err)
+		}
+		return nil
+	}
+	if cmd.Config.GatewaySession != "" {
+		client := httpapi.NewUnixSocketClient(observeSocketPath(cwd, cmd.Config.ObserveSocket))
+		_, err := httpapi.RenderAGUIRun(ctx, client, "http://fritz", httpapi.RunRequest{
+			Prompt:         cmd.Prompt,
+			Session:        sessionOptions(cmd.Session),
+			GatewaySession: cmd.Config.GatewaySession,
 		}, out)
 		if err != nil {
 			return wrapError("model", err)
@@ -392,6 +411,20 @@ func runChat(
 	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	if cmd.Config.ServerURL != "" {
 		return runRemoteChat(ctx, scanner, out, cmd)
+	}
+	if cmd.Config.GatewaySession != "" {
+		if isInteractiveTTY(in, out) {
+			runtime := newRemoteTerminalRuntime(httpapi.NewUnixSocketClient(observeSocketPath(cwd, cmd.Config.ObserveSocket)), "http://fritz", cmd.Config.GatewaySession, cfg.ModelID)
+			initialState, err := runtime.InitialState(ctx)
+			if err != nil {
+				return wrapError("session", err)
+			}
+			if err := terminalui.RunWithState(ctx, in, out, runtime, initialState); err != nil {
+				return wrapError("input", err)
+			}
+			return nil
+		}
+		return runRemoteChatWithClient(ctx, scanner, out, cmd, httpapi.NewUnixSocketClient(observeSocketPath(cwd, cmd.Config.ObserveSocket)), "http://fritz")
 	}
 	if err := validateProviderAccess(ctx, cwd, cfg); err != nil {
 		return wrapError("config", err)
@@ -476,6 +509,7 @@ func printAgentUsage(out io.Writer) {
 	fmt.Fprintf(out, "  %s run <prompt>\n", brand.CLIName)
 	fmt.Fprintf(out, "  %s chat\n", brand.CLIName)
 	fmt.Fprintf(out, "  %s serve\n", brand.CLIName)
+	fmt.Fprintf(out, "  %s attach [run-id]\n", brand.CLIName)
 	fmt.Fprintf(out, "  %s auth login <provider>\n", brand.CLIName)
 	fmt.Fprintf(out, "  %s auth logout <provider>\n", brand.CLIName)
 	fmt.Fprintf(out, "  %s auth status [provider]\n", brand.CLIName)
@@ -498,6 +532,8 @@ func printAgentUsage(out io.Writer) {
 	fmt.Fprintln(out, "  --log-file <path>")
 	fmt.Fprintln(out, "  --log-level <level>")
 	fmt.Fprintln(out, "  --server <url>")
+	fmt.Fprintln(out, "  --observe-socket <path>")
+	fmt.Fprintln(out, "  --gateway-session <key>")
 	fmt.Fprintln(out, "  --listen <addr>")
 	fmt.Fprintln(out, "  --session-dir <path>")
 	fmt.Fprintln(out, "  --chat-help=<bool>")
@@ -532,6 +568,8 @@ func printGatewayUsage(out io.Writer) {
 	fmt.Fprintln(out, "  --heartbeat-interval <duration>")
 	fmt.Fprintln(out, "  --log-file <path>")
 	fmt.Fprintln(out, "  --log-level <level>")
+	fmt.Fprintln(out, "  --observe-socket <path>")
+	fmt.Fprintln(out, "  --gateway-session <key>")
 	fmt.Fprintln(out, "  --provider <name>")
 	fmt.Fprintln(out, "  --model <id>")
 	fmt.Fprintln(out, "  --gemini-endpoint <url>")
@@ -818,7 +856,14 @@ func runTelegram(
 		return wrapError("config", err)
 	}
 	service := newService(cwd, cfg, newClient, registry, prompt.ProfileGateway)
-	gw := ingressruntime.New(cwd, cfg, engine.WrapService(service))
+	hub := observe.NewHub(1024, 50)
+	observedService := observe.WrapService(engine.WrapService(service), hub)
+	gw := ingressruntime.New(cwd, cfg, observedService)
+	if socketPath := observeSocketPath(cwd, cmd.Config.ObserveSocket); socketPath != "" && !cmd.PollOnce {
+		go func() {
+			_ = serveObserveSocket(ctx, socketPath, observedService, hub, gw)
+		}()
+	}
 	client := telegram.NewHTTPClient(http.DefaultClient, cfg.Telegram.Endpoint, cfg.Telegram.BotToken)
 	adapter := telegram.NewAdapterWithPaths(gw.Paths(), client, gw, telegram.Config{
 		PollTimeout:  cfg.Telegram.PollTimeout,
@@ -840,7 +885,7 @@ func runTelegram(
 			cfg.Heartbeat.Interval,
 			source,
 			heartbeat.SessionRunner{
-				Service:      engine.WrapService(service),
+				Service:      observedService,
 				SessionPaths: gw.SessionPathForKey,
 				Prompt:       "Heartbeat check. If there is nothing actionable to do right now, reply exactly HEARTBEAT_OK.",
 				PromptForWake: func(wake heartbeat.Wake) string {
@@ -872,6 +917,79 @@ func runTelegram(
 		}()
 	}
 	return wrapError("telegram", adapter.Run(ctx))
+}
+
+func runAttach(ctx context.Context, out io.Writer, cwd string, cmd command.Attach) error {
+	socketPath := observeSocketPath(cwd, cmd.Config.ObserveSocket)
+	if socketPath == "" {
+		return wrapError("observe", errors.New("missing observe socket"))
+	}
+	client := httpapi.NewUnixSocketClient(socketPath)
+	baseURL := "http://fritz"
+	runID := strings.TrimSpace(cmd.RunID)
+	if runID == "" {
+		runs, err := httpapi.ListRuns(ctx, client, baseURL)
+		if err != nil {
+			return wrapError("observe", err)
+		}
+		active := make([]observe.RunInfo, 0, len(runs))
+		for _, run := range runs {
+			if run.Status == observe.StatusRunning {
+				active = append(active, run)
+			}
+		}
+		if len(active) == 1 {
+			runID = active[0].ID
+		} else {
+			for _, run := range runs {
+				fmt.Fprintf(out, "%s\t%s\t%s\t%s\n", run.ID, run.Status, run.Session.Path, run.Prompt)
+			}
+			if len(active) == 0 {
+				return nil
+			}
+			return wrapError("observe", fmt.Errorf("multiple active runs; pass a run id"))
+		}
+	}
+	if err := httpapi.AttachRun(ctx, client, baseURL, runID, out); err != nil {
+		return wrapError("observe", err)
+	}
+	return nil
+}
+
+func serveObserveSocket(ctx context.Context, socketPath string, service engine.Service, hub *observe.Hub, resolver httpapi.SessionResolver) error {
+	if err := os.MkdirAll(filepath.Dir(socketPath), 0o700); err != nil {
+		return err
+	}
+	_ = os.Remove(socketPath)
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		return err
+	}
+	_ = os.Chmod(socketPath, 0o600)
+	server := &http.Server{
+		Handler: httpapi.NewHandlerWithOptions(service, hub, resolver),
+	}
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
+	}()
+	err = server.Serve(listener)
+	if err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
+}
+
+func observeSocketPath(cwd string, override string) string {
+	if path := strings.TrimSpace(override); path != "" {
+		return path
+	}
+	if path := strings.TrimSpace(os.Getenv("FRITZ_OBSERVE_SOCKET")); path != "" {
+		return path
+	}
+	return filepath.Join(config.DefaultWorkspaceGatewayRoot(cwd), "observe.sock")
 }
 
 func renderLocalRun(out io.Writer, handle agent.RunHandle) (agent.RunResult, error) {
@@ -910,8 +1028,19 @@ func runRemoteChat(
 	out io.Writer,
 	cmd command.Chat,
 ) error {
+	return runRemoteChatWithClient(ctx, scanner, out, cmd, http.DefaultClient, cmd.Config.ServerURL)
+}
+
+func runRemoteChatWithClient(
+	ctx context.Context,
+	scanner *bufio.Scanner,
+	out io.Writer,
+	cmd command.Chat,
+	client *http.Client,
+	baseURL string,
+) error {
 	sessionReq := sessionOptions(cmd.Session)
-	if cmd.Config.ServerURL == "" {
+	if baseURL == "" {
 		return nil
 	}
 	if sessionReq.SessionPath == "" && cmd.Session.Session != "" {
@@ -938,9 +1067,10 @@ func runRemoteChat(
 		case chat.InputQuit:
 			return nil
 		case chat.InputPrompt:
-			summary, err := httpapi.RenderAGUIRun(ctx, http.DefaultClient, cmd.Config.ServerURL, httpapi.RunRequest{
-				Prompt:  input.Text,
-				Session: sessionReq,
+			summary, err := httpapi.RenderAGUIRun(ctx, client, baseURL, httpapi.RunRequest{
+				Prompt:         input.Text,
+				Session:        sessionReq,
+				GatewaySession: cmd.Config.GatewaySession,
 			}, out)
 			if err != nil {
 				return err
@@ -964,6 +1094,171 @@ func sessionOptions(options command.SessionOptions) httpapi.SessionStartOptions 
 		NoSession:   options.NoSession,
 		NewSession:  options.NewSession,
 	}
+}
+
+type remoteTerminalRuntime struct {
+	client         *http.Client
+	baseURL        string
+	gatewaySession string
+	modelID        string
+	seq            atomic.Uint64
+}
+
+func newRemoteTerminalRuntime(client *http.Client, baseURL string, gatewaySession string, modelID string) *remoteTerminalRuntime {
+	return &remoteTerminalRuntime{
+		client:         client,
+		baseURL:        baseURL,
+		gatewaySession: gatewaySession,
+		modelID:        modelID,
+	}
+}
+
+func (r *remoteTerminalRuntime) Submit(ctx context.Context, req agent.RunRequest) (agent.RunHandle, error) {
+	runID := fmt.Sprintf("remote-%06d", r.seq.Add(1))
+	events := make(chan agent.Event, 64)
+	done := make(chan agent.RunResult, 1)
+	go func() {
+		defer close(events)
+		defer close(done)
+		state := chat.NewState()
+		err := httpapi.StreamRunPayloads(ctx, r.client, r.baseURL, httpapi.RunRequest{
+			Prompt:         req.Prompt,
+			GatewaySession: r.gatewaySession,
+		}, func(payload map[string]any) error {
+			event, ok := aguiPayloadToAgentEvent(runID, payload)
+			if !ok {
+				return nil
+			}
+			if event.RunID != "" {
+				runID = event.RunID
+			}
+			events <- event
+			return nil
+		})
+		done <- agent.RunResult{State: state, Err: err}
+	}()
+	return agent.RunHandle{ID: runID, Events: events, Done: done}, nil
+}
+
+func (r *remoteTerminalRuntime) Reset() {}
+
+func (r *remoteTerminalRuntime) CancelRun(runID string) bool {
+	if err := httpapi.CancelRun(context.Background(), r.client, r.baseURL, runID); err != nil {
+		return false
+	}
+	return true
+}
+
+func (r *remoteTerminalRuntime) ModelID() string {
+	if strings.TrimSpace(r.modelID) == "" {
+		return "remote"
+	}
+	return r.modelID
+}
+
+func (r *remoteTerminalRuntime) InitialState(ctx context.Context) (terminalui.State, error) {
+	state := terminalui.NewState()
+	session, err := httpapi.GetGatewaySession(ctx, r.client, r.baseURL, r.gatewaySession)
+	if err != nil {
+		return state, err
+	}
+	for _, turn := range session.Transcript {
+		state = state.AddUserPrompt(turn.User)
+		message := model.TextMessage(model.ModelRole, turn.Assistant)
+		state = state.Apply(agent.Event{
+			ID:        fmt.Sprintf("history-%d", time.Now().UnixNano()),
+			Kind:      agent.EventMessageCompleted,
+			MessageID: fmt.Sprintf("history-assistant-%d", time.Now().UnixNano()),
+			Message:   &message,
+			Time:      time.Now().UTC(),
+		})
+	}
+	return state, nil
+}
+
+func aguiPayloadToAgentEvent(fallbackRunID string, payload map[string]any) (agent.Event, bool) {
+	typ, _ := payload["type"].(string)
+	runID, _ := payload["runId"].(string)
+	if runID == "" {
+		runID = fallbackRunID
+	}
+	messageID, _ := payload["messageId"].(string)
+	event := agent.Event{
+		ID:        fmt.Sprintf("%s-%d", runID, time.Now().UnixNano()),
+		RunID:     runID,
+		MessageID: messageID,
+		Time:      time.Now().UTC(),
+	}
+	switch typ {
+	case "RUN_STARTED":
+		event.Kind = agent.EventRunStarted
+	case "REASONING_MESSAGE_START":
+		event.Kind = agent.EventReasoningStarted
+	case "REASONING_MESSAGE_CONTENT":
+		event.Kind = agent.EventReasoningDelta
+		event.TextDelta, _ = payload["delta"].(string)
+	case "REASONING_MESSAGE_END":
+		event.Kind = agent.EventReasoningCompleted
+	case "TEXT_MESSAGE_CONTENT":
+		event.Kind = agent.EventTextDelta
+		event.TextDelta, _ = payload["delta"].(string)
+	case "TEXT_MESSAGE_END":
+		event.Kind = agent.EventMessageCompleted
+		text, _ := payload["text"].(string)
+		message := model.TextMessage(model.ModelRole, text)
+		event.Message = &message
+	case "TOOL_CALL_START":
+		event.Kind = agent.EventToolCallStarted
+		event.ToolCall = &tool.Call{
+			ID:   stringFromPayload(payload, "toolCallId", "remote-tool"),
+			Name: stringFromPayload(payload, "toolName", "tool"),
+		}
+	case "TOOL_CALL_ARGS":
+		return agent.Event{}, false
+	case "TOOL_CALL_RESULT":
+		event.Kind = agent.EventToolCallCompleted
+		callID := stringFromPayload(payload, "toolCallId", "remote-tool")
+		toolName := stringFromPayload(payload, "toolName", "tool")
+		event.ToolCall = &tool.Call{ID: callID, Name: toolName}
+		event.ToolResult = aguiToolResult(toolName, payload["result"])
+	case "RUN_ERROR":
+		event.Kind = agent.EventRunFailed
+		event.Error, _ = payload["message"].(string)
+	case "RUN_FINISHED":
+		event.Kind = agent.EventRunFinished
+	default:
+		return agent.Event{}, false
+	}
+	return event, true
+}
+
+func aguiToolResult(name string, raw any) *tool.Result {
+	result := tool.Result{Name: name}
+	if rawMap, ok := raw.(map[string]any); ok {
+		if isError, ok := rawMap["isError"].(bool); ok {
+			result.IsError = isError
+		}
+		if parts, ok := rawMap["parts"].([]any); ok {
+			for _, part := range parts {
+				partMap, ok := part.(map[string]any)
+				if !ok {
+					continue
+				}
+				if text, ok := partMap["text"].(string); ok {
+					result.Parts = append(result.Parts, tool.TextPart(text))
+				}
+			}
+		}
+	}
+	return &result
+}
+
+func stringFromPayload(payload map[string]any, key string, fallback string) string {
+	value, _ := payload[key].(string)
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }
 
 func runServe(

@@ -13,6 +13,7 @@ import (
 	"fritz/internal/engine"
 	"fritz/internal/logx"
 	"fritz/internal/model"
+	"fritz/internal/tool"
 )
 
 type ChatType string
@@ -29,6 +30,7 @@ type InboundMessage struct {
 	UserID     string
 	SessionKey string
 	Text       string
+	Images     []tool.ContentPart
 	Metadata   map[string]string
 }
 
@@ -129,7 +131,7 @@ func (g *Gateway) HandleInboundStream(ctx context.Context, message InboundMessag
 		logger.Error().Err(err).Str("event", "gateway.engine.start").Msg("")
 		return HandleResult{}, err
 	}
-	run, err := session.Submit(ctx, engine.RunRequest{Prompt: strings.TrimSpace(message.Text)})
+	run, err := session.Submit(ctx, engine.RunRequest{Prompt: strings.TrimSpace(message.Text), Images: message.Images})
 	if err != nil {
 		logger.Error().Err(err).Str("event", "gateway.run.submit").Msg("")
 		return HandleResult{}, err

@@ -10,6 +10,7 @@ import (
 	"fritz/internal/tool"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -80,6 +81,22 @@ func TestNewModelRemovesShortcutHelpFromPlaceholder(t *testing.T) {
 	model := NewModel(nil)
 	if model.input.Placeholder != "Type a prompt." {
 		t.Fatalf("placeholder = %q", model.input.Placeholder)
+	}
+}
+
+func TestInputPlaceholderUsesLightReadableStyle(t *testing.T) {
+	model := NewModel(nil)
+	if got := model.input.FocusedStyle.Text.GetForeground(); got != lipgloss.Color("0") {
+		t.Fatalf("text foreground = %#v", got)
+	}
+	if got := model.input.FocusedStyle.Text.GetBackground(); got != lipgloss.Color("15") {
+		t.Fatalf("text background = %#v", got)
+	}
+	if got := model.input.FocusedStyle.Placeholder.GetForeground(); got != lipgloss.Color("8") {
+		t.Fatalf("placeholder foreground = %#v", got)
+	}
+	if got := model.input.FocusedStyle.Placeholder.GetBackground(); got != lipgloss.Color("15") {
+		t.Fatalf("placeholder background = %#v", got)
 	}
 }
 

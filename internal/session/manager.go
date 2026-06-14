@@ -18,11 +18,12 @@ import (
 	"fritz/internal/config"
 	"fritz/internal/model"
 	"fritz/internal/prompt"
+	"fritz/internal/tool"
 )
 
 const CurrentSessionVersion = 1
 
-const maxSessionLineBytes = 8 * 1024 * 1024
+const maxSessionLineBytes = 64 * 1024 * 1024
 
 type EntryType string
 
@@ -349,13 +350,17 @@ func (m *Manager) persistLine(line Line) error {
 }
 
 func (m *Manager) AppendPrompt(prompt string) (Line, error) {
+	return m.AppendPromptWithImages(prompt, nil)
+}
+
+func (m *Manager) AppendPromptWithImages(prompt string, images []tool.ContentPart) (Line, error) {
 	line := Line{
 		Type:      MessageEntryType,
 		ID:        newID(),
 		ParentID:  maybeString(m.leafID),
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 		Kind:      UserPromptKind,
-		Message:   model.TextMessage(model.UserRole, prompt),
+		Message:   model.MessageWithImages(model.UserRole, prompt, images),
 		Text:      prompt,
 	}
 	return line, m.appendLine(line)

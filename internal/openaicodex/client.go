@@ -15,7 +15,10 @@ import (
 	"fritz/internal/tool"
 )
 
-const defaultEndpoint = "https://chatgpt.com/backend-api"
+const (
+	defaultEndpoint = "https://chatgpt.com/backend-api"
+	maxSSELineBytes = 64 * 1024 * 1024
+)
 
 type AuthFunc func(context.Context) (provider.RequestAuth, error)
 type Option func(*Client)
@@ -334,7 +337,7 @@ func resolveCodexURL(endpoint string) string {
 
 func decodeSSE(body io.Reader, emit func(model.StreamEvent) error) (model.Response, error) {
 	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxSSELineBytes)
 	var chunk []string
 	response := model.Response{Message: model.Message{Role: model.ModelRole}}
 	var textBuf strings.Builder

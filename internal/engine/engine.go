@@ -34,6 +34,7 @@ const (
 
 type RunRequest struct {
 	Prompt string
+	Images []tool.ContentPart
 }
 
 type SessionOptions struct {
@@ -123,7 +124,7 @@ type localSession struct {
 }
 
 func (s localSession) Submit(ctx context.Context, req RunRequest) (Run, error) {
-	handle, err := s.base.Submit(ctx, agent.RunRequest{Prompt: req.Prompt})
+	handle, err := s.base.Submit(ctx, agent.RunRequest{Prompt: req.Prompt, Images: req.Images})
 	if err != nil {
 		return Run{}, err
 	}

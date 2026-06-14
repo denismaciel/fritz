@@ -203,7 +203,7 @@ func (r *Runtime) Submit(ctx context.Context, req RunRequest) (RunHandle, error)
 		r.gateway = r.service.newClient(r.cfg)
 	}
 	if r.manager != nil {
-		if _, err := r.manager.AppendPrompt(expanded); err != nil {
+		if _, err := r.manager.AppendPromptWithImages(expanded, req.Images); err != nil {
 			return RunHandle{}, err
 		}
 	}

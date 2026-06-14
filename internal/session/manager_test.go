@@ -11,6 +11,7 @@ import (
 	"fritz/internal/chat"
 	"fritz/internal/config"
 	"fritz/internal/model"
+	"fritz/internal/tool"
 )
 
 type fakeGateway struct {
@@ -66,13 +67,48 @@ func TestManagerCreateAppendOpen(t *testing.T) {
 	}
 }
 
+func TestManagerAppendPromptWithImagesPersistsImageParts(t *testing.T) {
+	cwd := t.TempDir()
+	manager, err := Create(cwd, ".fritz/sessions")
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := manager.AppendPromptWithImages("[Image]", []tool.ContentPart{
+		tool.ImagePart("image/png", "Zm9v"),
+	}); err != nil {
+		t.Fatalf("AppendPromptWithImages() error = %v", err)
+	}
+	if _, err := manager.AppendModelResponse(model.Response{
+		Message: model.TextMessage(model.ModelRole, "seen"),
+		Text:    "seen",
+	}); err != nil {
+		t.Fatalf("AppendModelResponse() error = %v", err)
+	}
+
+	opened, err := Open(manager.SessionFile(), ".fritz/sessions")
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	context := opened.BuildContext()
+	if len(context.Messages) < 1 {
+		t.Fatalf("Messages = %#v", context.Messages)
+	}
+	user := context.Messages[0]
+	if user.Text() != "[Image]" {
+		t.Fatalf("user text = %q", user.Text())
+	}
+	if len(user.Parts) != 2 || user.Parts[1].ImageMIMEType != "image/png" || user.Parts[1].ImageData != "Zm9v" {
+		t.Fatalf("user parts = %#v", user.Parts)
+	}
+}
+
 func TestOpenAcceptsLargeSessionLine(t *testing.T) {
 	cwd := t.TempDir()
 	manager, err := Create(cwd, ".fritz/sessions")
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
-	large := strings.Repeat("x", 1024*1024+1)
+	large := strings.Repeat("x", 9*1024*1024)
 	if _, err := manager.AppendPrompt("hi"); err != nil {
 		t.Fatalf("AppendPrompt() error = %v", err)
 	}

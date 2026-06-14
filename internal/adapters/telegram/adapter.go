@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -11,6 +12,7 @@ import (
 
 	"fritz/internal/ingress"
 	"fritz/internal/logx"
+	"fritz/internal/tool"
 	"fritz/internal/transcription"
 )
 
@@ -239,6 +241,9 @@ func normalizeUpdate(update Update, transcript string) (ingress.InboundMessage, 
 	}
 	audio, hasAudio := selectAudio(update.Message)
 	body := text
+	if body == "" && len(update.Message.Photo) > 0 {
+		body = "[Image]"
+	}
 	if strings.TrimSpace(transcript) != "" && hasAudio {
 		if text != "" {
 			body = "[Audio]\nUser text:\n" + text + "\nTranscript:\n" + strings.TrimSpace(transcript)
@@ -296,6 +301,12 @@ func normalizeUpdate(update Update, transcript string) (ingress.InboundMessage, 
 
 func (a *Adapter) normalizeUpdate(ctx context.Context, update Update) (ingress.InboundMessage, bool) {
 	message, ok := NormalizeUpdate(update)
+	if ok && len(update.Message.Photo) > 0 {
+		message.Images = a.downloadPhotos(ctx, update.Message)
+		if len(message.Images) > 0 {
+			message.Metadata["image_count"] = strconv.Itoa(len(message.Images))
+		}
+	}
 	if ok {
 		if !hasAudioAttachment(update.Message) {
 			return message, true
@@ -328,6 +339,47 @@ func (a *Adapter) normalizeUpdate(ctx context.Context, update Update) (ingress.I
 		return message, ok
 	}
 	return normalizeUpdate(update, transcript)
+}
+
+func (a *Adapter) downloadPhotos(ctx context.Context, message *Message) []tool.ContentPart {
+	photo, ok := selectPhoto(message)
+	if !ok {
+		return nil
+	}
+	file, err := a.client.GetFile(ctx, photo.FileID)
+	if err != nil || strings.TrimSpace(file.FilePath) == "" {
+		return nil
+	}
+	body, err := a.client.DownloadFile(ctx, file.FilePath)
+	if err != nil || len(body) == 0 {
+		return nil
+	}
+	return []tool.ContentPart{tool.ImagePart(mimeTypeForTelegramPath(file.FilePath), base64.StdEncoding.EncodeToString(body))}
+}
+
+func selectPhoto(message *Message) (Photo, bool) {
+	if message == nil || len(message.Photo) == 0 {
+		return Photo{}, false
+	}
+	for i := len(message.Photo) - 1; i >= 0; i-- {
+		if strings.TrimSpace(message.Photo[i].FileID) != "" {
+			return Photo{FileID: strings.TrimSpace(message.Photo[i].FileID)}, true
+		}
+	}
+	return Photo{}, false
+}
+
+func mimeTypeForTelegramPath(path string) string {
+	switch strings.ToLower(filepath.Ext(strings.TrimSpace(path))) {
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	case ".gif":
+		return "image/gif"
+	default:
+		return "image/jpeg"
+	}
 }
 
 type audioAttachment struct {
