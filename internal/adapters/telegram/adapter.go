@@ -110,6 +110,7 @@ func (a *Adapter) PollOnce(ctx context.Context) (int, error) {
 	updates, err := a.client.GetUpdates(ctx, GetUpdatesRequest{
 		Offset:         offset,
 		TimeoutSeconds: int(a.cfg.PollTimeout / time.Second),
+		AllowedUpdates: []string{"message"},
 	})
 	if err != nil {
 		logger.Error().Err(err).Str("stage", "get_updates").Int64("offset", offset).Msg("")

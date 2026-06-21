@@ -32,8 +32,9 @@ type BotInfo struct {
 }
 
 type GetUpdatesRequest struct {
-	Offset         int64 `json:"offset,omitempty"`
-	TimeoutSeconds int   `json:"timeout,omitempty"`
+	Offset         int64    `json:"offset,omitempty"`
+	TimeoutSeconds int      `json:"timeout,omitempty"`
+	AllowedUpdates []string `json:"allowed_updates,omitempty"`
 }
 
 type SendMessageRequest struct {

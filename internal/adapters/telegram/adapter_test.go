@@ -326,6 +326,9 @@ func TestAdapterPollOnceRoutesRepliesAndPersistsOffset(t *testing.T) {
 	if client.lastOffset != 0 {
 		t.Fatalf("lastOffset = %d", client.lastOffset)
 	}
+	if len(client.lastAllowed) != 1 || client.lastAllowed[0] != "message" {
+		t.Fatalf("allowed updates = %#v", client.lastAllowed)
+	}
 
 	client.updates = nil
 	secondAdapter := NewAdapter(filepath.Join(dir, "telegram"), client, handler, Config{
@@ -550,6 +553,7 @@ type fakeClient struct {
 	updates        []Update
 	lastOffset     int64
 	lastTimeout    int
+	lastAllowed    []string
 	sent           []SendMessageRequest
 	filePathByID   map[string]string
 	fileBodyByPath map[string][]byte
@@ -566,6 +570,7 @@ func (f *fakeClient) GetMe(context.Context) (BotInfo, error) {
 func (f *fakeClient) GetUpdates(_ context.Context, req GetUpdatesRequest) ([]Update, error) {
 	f.lastOffset = req.Offset
 	f.lastTimeout = req.TimeoutSeconds
+	f.lastAllowed = append([]string(nil), req.AllowedUpdates...)
 	return append([]Update(nil), f.updates...), nil
 }
 
