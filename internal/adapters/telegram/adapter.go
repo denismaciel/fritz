@@ -186,6 +186,11 @@ func (a *Adapter) PollOnce(ctx context.Context) (int, error) {
 		result, err := a.handler.HandleInbound(ctx, message)
 		if err != nil {
 			updateLogger.Error().Err(err).Str("stage", "ingress.handle").Msg("")
+			if nextOffset != offset {
+				if saveErr := a.saveOffset(nextOffset); saveErr != nil {
+					logger.Error().Err(saveErr).Str("stage", "offset.save").Int64("next_offset", nextOffset).Msg("")
+				}
+			}
 			return processed, err
 		}
 		updateLogger.Info().
@@ -711,7 +716,7 @@ func buildGroupPrompt(messages []groupContextMessage, current ingress.InboundMes
 		builder.WriteString("] ")
 		builder.WriteString(groupSenderLabel(message))
 		builder.WriteString(": ")
-		builder.WriteString(text)
+		builder.WriteString(sanitizeTelegramPromptText(text))
 		builder.WriteString("\n")
 	}
 	builder.WriteString("\nAddressed request:\n")
@@ -720,21 +725,37 @@ func buildGroupPrompt(messages []groupContextMessage, current ingress.InboundMes
 		Username: current.Metadata["from_username"],
 	}))
 	builder.WriteString(": ")
-	builder.WriteString(strings.TrimSpace(current.Text))
+	builder.WriteString(sanitizeTelegramPromptText(stripBotAddress(strings.TrimSpace(current.Text))))
 	return builder.String()
 }
 
 func groupSenderLabel(message groupContextMessage) string {
 	switch {
 	case strings.TrimSpace(message.Username) != "" && strings.TrimSpace(message.UserID) != "":
-		return "@" + strings.TrimPrefix(strings.TrimSpace(message.Username), "@") + " (id " + strings.TrimSpace(message.UserID) + ")"
+		return "user " + strings.TrimPrefix(strings.TrimSpace(message.Username), "@") + " (id " + strings.TrimSpace(message.UserID) + ")"
 	case strings.TrimSpace(message.Username) != "":
-		return "@" + strings.TrimPrefix(strings.TrimSpace(message.Username), "@")
+		return "user " + strings.TrimPrefix(strings.TrimSpace(message.Username), "@")
 	case strings.TrimSpace(message.UserID) != "":
 		return "id " + strings.TrimSpace(message.UserID)
 	default:
 		return "unknown"
 	}
+}
+
+func sanitizeTelegramPromptText(text string) string {
+	return strings.ReplaceAll(strings.TrimSpace(text), "@", "at ")
+}
+
+func stripBotAddress(text string) string {
+	fields := strings.Fields(strings.TrimSpace(text))
+	if len(fields) == 0 {
+		return ""
+	}
+	first := strings.TrimRight(strings.ToLower(fields[0]), ":,")
+	if first == "/fritz" || strings.HasPrefix(first, "/fritz@") || strings.HasPrefix(first, "@") {
+		return strings.TrimSpace(strings.Join(fields[1:], " "))
+	}
+	return strings.TrimSpace(text)
 }
 
 func firstNonEmpty(values ...string) string {

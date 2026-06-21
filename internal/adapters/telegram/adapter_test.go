@@ -526,9 +526,10 @@ func TestAdapterBuffersGroupContextAndOnlyRepliesWhenAddressed(t *testing.T) {
 		t.Fatalf("calls = %d", handler.calls)
 	}
 	if !strings.Contains(handler.last.Text, "Telegram group context") ||
-		!strings.Contains(handler.last.Text, "@alice (id 7): we need pizza") ||
+		!strings.Contains(handler.last.Text, "user alice (id 7): we need pizza") ||
 		!strings.Contains(handler.last.Text, "Addressed request:") ||
-		!strings.Contains(handler.last.Text, "@bob (id 8): @borinho_bot summarize") {
+		!strings.Contains(handler.last.Text, "user bob (id 8): summarize") ||
+		strings.Contains(handler.last.Text, "@borinho_bot") {
 		t.Fatalf("decorated prompt = %q", handler.last.Text)
 	}
 	if len(client.sent) != 1 || client.sent[0].ChatID != 99 || client.sent[0].Text != "pong" {
