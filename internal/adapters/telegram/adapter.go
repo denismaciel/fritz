@@ -17,8 +17,10 @@ import (
 )
 
 const maxGroupContextMessages = 80
+const fallbackBotUsername = "fritz"
 
 type Client interface {
+	GetMe(context.Context) (BotInfo, error)
 	GetUpdates(context.Context, GetUpdatesRequest) ([]Update, error)
 	SendMessage(context.Context, SendMessageRequest) error
 	GetFile(context.Context, string) (File, error)
@@ -30,10 +32,11 @@ type Handler interface {
 }
 
 type Adapter struct {
-	paths   ingress.StatePaths
-	client  Client
-	handler Handler
-	cfg     Config
+	paths       ingress.StatePaths
+	client      Client
+	handler     Handler
+	cfg         Config
+	botUsername string
 }
 
 type Config struct {
@@ -149,7 +152,7 @@ func (a *Adapter) PollOnce(ctx context.Context) (int, error) {
 		}
 		if message.ChatType == ingress.ChatTypeGroup {
 			originalMessage := message
-			addressed := isAddressedGroupMessage(message)
+			addressed := a.isAddressedGroupMessage(ctx, message)
 			if !addressed {
 				if err := a.appendGroupContext(message); err != nil {
 					updateLogger.Error().Err(err).Str("stage", "group_context.save").Msg("")
@@ -647,19 +650,51 @@ func (a *Adapter) groupContextPath(chatID string) string {
 	return filepath.Join(a.paths.TelegramDir, "groups", name+".json")
 }
 
-func isAddressedGroupMessage(message ingress.InboundMessage) bool {
+func (a *Adapter) isAddressedGroupMessage(ctx context.Context, message ingress.InboundMessage) bool {
 	text := strings.TrimSpace(strings.ToLower(message.Text))
 	if text == "" {
 		return false
 	}
+	names := a.botAddressNames(ctx)
 	fields := strings.Fields(text)
 	if len(fields) > 0 {
 		first := strings.TrimRight(fields[0], ":,")
-		if first == "/fritz" || strings.HasPrefix(first, "/fritz@") || first == "@fritz" || first == "@fritz_bot" {
+		if first == "/fritz" {
+			return true
+		}
+		for _, name := range names {
+			if first == "@"+name || first == "/fritz@"+name {
+				return true
+			}
+		}
+	}
+	for _, name := range names {
+		if strings.Contains(text, "@"+name+" ") || strings.HasSuffix(text, "@"+name) {
 			return true
 		}
 	}
-	return strings.Contains(text, "@fritz ")
+	return false
+}
+
+func (a *Adapter) botAddressNames(ctx context.Context) []string {
+	names := map[string]struct{}{
+		fallbackBotUsername: {},
+		"fritz_bot":         {},
+	}
+	if username := strings.TrimSpace(a.botUsername); username != "" {
+		names[strings.ToLower(strings.TrimPrefix(username, "@"))] = struct{}{}
+	} else if info, err := a.client.GetMe(ctx); err == nil {
+		a.botUsername = strings.TrimSpace(info.Username)
+		if a.botUsername != "" {
+			names[strings.ToLower(strings.TrimPrefix(a.botUsername, "@"))] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(names))
+	for name := range names {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func buildGroupPrompt(messages []groupContextMessage, current ingress.InboundMessage) string {

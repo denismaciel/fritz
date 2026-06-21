@@ -26,6 +26,11 @@ type File struct {
 	FilePath string `json:"file_path"`
 }
 
+type BotInfo struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username,omitempty"`
+}
+
 type GetUpdatesRequest struct {
 	Offset         int64 `json:"offset,omitempty"`
 	TimeoutSeconds int   `json:"timeout,omitempty"`
@@ -117,6 +122,12 @@ func (c *HTTPClient) GetUpdates(ctx context.Context, req GetUpdatesRequest) ([]U
 	return response.Result, nil
 }
 
+func (c *HTTPClient) GetMe(ctx context.Context) (BotInfo, error) {
+	var response apiResponse[BotInfo]
+	err := c.post(ctx, "getMe", map[string]string{}, &response)
+	return response.Result, err
+}
+
 func (c *HTTPClient) SendMessage(ctx context.Context, req SendMessageRequest) error {
 	var response apiResponse[json.RawMessage]
 	return c.post(ctx, "sendMessage", req, &response)
@@ -184,6 +195,13 @@ func (c *HTTPClient) post(ctx context.Context, method string, payload any, out a
 	}
 	switch typed := out.(type) {
 	case *apiResponse[[]Update]:
+		if !typed.OK {
+			err := fmt.Errorf("telegram %s failed: %s", method, strings.TrimSpace(typed.Description))
+			logger := logx.Component("telegram")
+			logger.Error().Err(err).Str("event", "telegram.api.failed").Str("method", method).Msg("")
+			return err
+		}
+	case *apiResponse[BotInfo]:
 		if !typed.OK {
 			err := fmt.Errorf("telegram %s failed: %s", method, strings.TrimSpace(typed.Description))
 			logger := logx.Component("telegram")

@@ -491,10 +491,11 @@ func TestAdapterBuffersGroupContextAndOnlyRepliesWhenAddressed(t *testing.T) {
 					Chat:      Chat{ID: 99, Type: "group", Title: "grp"},
 					From:      &User{ID: 8, Username: "bob"},
 					Date:      101,
-					Text:      "@fritz summarize",
+					Text:      "@borinho_bot summarize",
 				},
 			},
 		},
+		me: BotInfo{Username: "borinho_bot"},
 	}
 	handler := &captureHandler{
 		result: ingress.HandleResult{
@@ -524,7 +525,7 @@ func TestAdapterBuffersGroupContextAndOnlyRepliesWhenAddressed(t *testing.T) {
 	if !strings.Contains(handler.last.Text, "Telegram group context") ||
 		!strings.Contains(handler.last.Text, "@alice (id 7): we need pizza") ||
 		!strings.Contains(handler.last.Text, "Addressed request:") ||
-		!strings.Contains(handler.last.Text, "@bob (id 8): @fritz summarize") {
+		!strings.Contains(handler.last.Text, "@bob (id 8): @borinho_bot summarize") {
 		t.Fatalf("decorated prompt = %q", handler.last.Text)
 	}
 	if len(client.sent) != 1 || client.sent[0].ChatID != 99 || client.sent[0].Text != "pong" {
@@ -537,7 +538,7 @@ func TestAdapterBuffersGroupContextAndOnlyRepliesWhenAddressed(t *testing.T) {
 	if len(state.Messages) != 3 {
 		t.Fatalf("messages = %#v", state.Messages)
 	}
-	if state.Messages[1].Text != "@fritz summarize" || strings.Contains(state.Messages[1].Text, "Telegram group context") {
+	if state.Messages[1].Text != "@borinho_bot summarize" || strings.Contains(state.Messages[1].Text, "Telegram group context") {
 		t.Fatalf("stored addressed message = %#v", state.Messages[1])
 	}
 	if state.Messages[2].UserID != "fritz" || state.Messages[2].Text != "pong" {
@@ -552,6 +553,14 @@ type fakeClient struct {
 	sent           []SendMessageRequest
 	filePathByID   map[string]string
 	fileBodyByPath map[string][]byte
+	me             BotInfo
+}
+
+func (f *fakeClient) GetMe(context.Context) (BotInfo, error) {
+	if f.me.ID == 0 && f.me.Username == "" {
+		return BotInfo{Username: "fritz"}, nil
+	}
+	return f.me, nil
 }
 
 func (f *fakeClient) GetUpdates(_ context.Context, req GetUpdatesRequest) ([]Update, error) {
