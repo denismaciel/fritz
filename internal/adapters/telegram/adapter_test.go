@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -466,6 +467,81 @@ func TestAdapterIgnoresUnauthorizedGroup(t *testing.T) {
 	}
 	if len(client.sent) != 0 {
 		t.Fatalf("sent = %#v", client.sent)
+	}
+}
+
+func TestAdapterBuffersGroupContextAndOnlyRepliesWhenAddressed(t *testing.T) {
+	dir := t.TempDir()
+	client := &fakeClient{
+		updates: []Update{
+			{
+				UpdateID: 1,
+				Message: &Message{
+					MessageID: 10,
+					Chat:      Chat{ID: 99, Type: "group", Title: "grp"},
+					From:      &User{ID: 7, Username: "alice"},
+					Date:      100,
+					Text:      "we need pizza",
+				},
+			},
+			{
+				UpdateID: 2,
+				Message: &Message{
+					MessageID: 11,
+					Chat:      Chat{ID: 99, Type: "group", Title: "grp"},
+					From:      &User{ID: 8, Username: "bob"},
+					Date:      101,
+					Text:      "@fritz summarize",
+				},
+			},
+		},
+	}
+	handler := &captureHandler{
+		result: ingress.HandleResult{
+			SessionKey: "telegram:group:99",
+			Messages: []ingress.OutboundMessage{{
+				Channel: "telegram",
+				ChatID:  "99",
+				Text:    "pong",
+			}},
+		},
+	}
+	adapter := NewAdapter(filepath.Join(dir, "telegram"), client, handler, Config{
+		PollTimeout:  time.Second,
+		AllowedUsers: []string{"7", "8"},
+	})
+
+	count, err := adapter.PollOnce(context.Background())
+	if err != nil {
+		t.Fatalf("PollOnce() error = %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("count = %d", count)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("calls = %d", handler.calls)
+	}
+	if !strings.Contains(handler.last.Text, "Telegram group context") ||
+		!strings.Contains(handler.last.Text, "@alice (id 7): we need pizza") ||
+		!strings.Contains(handler.last.Text, "Addressed request:") ||
+		!strings.Contains(handler.last.Text, "@bob (id 8): @fritz summarize") {
+		t.Fatalf("decorated prompt = %q", handler.last.Text)
+	}
+	if len(client.sent) != 1 || client.sent[0].ChatID != 99 || client.sent[0].Text != "pong" {
+		t.Fatalf("sent = %#v", client.sent)
+	}
+	state, err := adapter.loadGroupContext("99")
+	if err != nil {
+		t.Fatalf("loadGroupContext() error = %v", err)
+	}
+	if len(state.Messages) != 3 {
+		t.Fatalf("messages = %#v", state.Messages)
+	}
+	if state.Messages[1].Text != "@fritz summarize" || strings.Contains(state.Messages[1].Text, "Telegram group context") {
+		t.Fatalf("stored addressed message = %#v", state.Messages[1])
+	}
+	if state.Messages[2].UserID != "fritz" || state.Messages[2].Text != "pong" {
+		t.Fatalf("stored reply = %#v", state.Messages[2])
 	}
 }
 

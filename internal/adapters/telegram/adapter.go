@@ -16,6 +16,8 @@ import (
 	"fritz/internal/transcription"
 )
 
+const maxGroupContextMessages = 80
+
 type Client interface {
 	GetUpdates(context.Context, GetUpdatesRequest) ([]Update, error)
 	SendMessage(context.Context, SendMessageRequest) error
@@ -39,6 +41,20 @@ type Config struct {
 	PairingToken string
 	AllowedUsers []string
 	Transcriber  transcription.Service
+}
+
+type groupContextFile struct {
+	Version  int                   `json:"version"`
+	ChatID   string                `json:"chatId"`
+	Messages []groupContextMessage `json:"messages"`
+}
+
+type groupContextMessage struct {
+	MessageID string `json:"messageId,omitempty"`
+	UserID    string `json:"userId,omitempty"`
+	Username  string `json:"username,omitempty"`
+	SentAt    string `json:"sentAt,omitempty"`
+	Text      string `json:"text"`
 }
 
 func NewAdapter(stateRoot string, client Client, handler Handler, cfg Config) *Adapter {
@@ -131,6 +147,29 @@ func (a *Adapter) PollOnce(ctx context.Context) (int, error) {
 			processed++
 			continue
 		}
+		if message.ChatType == ingress.ChatTypeGroup {
+			originalMessage := message
+			addressed := isAddressedGroupMessage(message)
+			if !addressed {
+				if err := a.appendGroupContext(message); err != nil {
+					updateLogger.Error().Err(err).Str("stage", "group_context.save").Msg("")
+					return processed, err
+				}
+				updateLogger.Debug().Str("event", "telegram.group.context_only").Str("chat_id", message.ChatID).Msg("")
+				processed++
+				continue
+			}
+			contextMessages, err := a.loadGroupContext(message.ChatID)
+			if err != nil {
+				updateLogger.Error().Err(err).Str("stage", "group_context.load").Msg("")
+				return processed, err
+			}
+			message.Text = buildGroupPrompt(contextMessages.Messages, message)
+			if err := a.appendGroupContext(originalMessage); err != nil {
+				updateLogger.Error().Err(err).Str("stage", "group_context.save").Msg("")
+				return processed, err
+			}
+		}
 		if strings.TrimSpace(reply) != "" {
 			updateLogger.Info().Str("event", "telegram.auth.paired").Str("chat_id", message.ChatID).Str("user_id", message.UserID).Msg("")
 			if err := a.sendReply(ctx, message.ChatID, reply); err != nil {
@@ -157,6 +196,18 @@ func (a *Adapter) PollOnce(ctx context.Context) (int, error) {
 			if err := a.sendReply(ctx, outbound.ChatID, outbound.Text); err != nil {
 				updateLogger.Error().Err(err).Str("stage", "reply.send").Msg("")
 				return processed, err
+			}
+			if message.ChatType == ingress.ChatTypeGroup {
+				_ = a.appendGroupContext(ingress.InboundMessage{
+					ChatType: message.ChatType,
+					ChatID:   outbound.ChatID,
+					UserID:   "fritz",
+					Text:     outbound.Text,
+					Metadata: map[string]string{
+						"from_username": "fritz",
+						"sent_at":       time.Now().UTC().Format(time.RFC3339),
+					},
+				})
 			}
 		}
 		processed++
@@ -270,6 +321,12 @@ func normalizeUpdate(update Update, transcript string) (ingress.InboundMessage, 
 		if update.Message.From.Username != "" {
 			message.Metadata["from_username"] = update.Message.From.Username
 		}
+	}
+	if update.Message.MessageID != 0 {
+		message.Metadata["message_id"] = strconv.FormatInt(update.Message.MessageID, 10)
+	}
+	if update.Message.Date > 0 {
+		message.Metadata["sent_at"] = time.Unix(update.Message.Date, 0).UTC().Format(time.RFC3339)
 	}
 	if update.Message.Chat.Title != "" {
 		message.Metadata["chat_title"] = update.Message.Chat.Title
@@ -540,6 +597,117 @@ func (a *Adapter) savePairings(state ingress.TelegramPairingFile) error {
 		state.Paired = []ingress.TelegramPairingRecord{}
 	}
 	return ingress.WriteJSONFileAtomic(a.paths.TelegramPairingPath, state)
+}
+
+func (a *Adapter) appendGroupContext(message ingress.InboundMessage) error {
+	chatID := strings.TrimSpace(message.ChatID)
+	if chatID == "" || strings.TrimSpace(message.Text) == "" {
+		return nil
+	}
+	state, err := a.loadGroupContext(chatID)
+	if err != nil {
+		return err
+	}
+	state.Messages = append(state.Messages, groupContextMessage{
+		MessageID: strings.TrimSpace(message.Metadata["message_id"]),
+		UserID:    strings.TrimSpace(message.UserID),
+		Username:  strings.TrimSpace(message.Metadata["from_username"]),
+		SentAt:    firstNonEmpty(strings.TrimSpace(message.Metadata["sent_at"]), time.Now().UTC().Format(time.RFC3339)),
+		Text:      strings.TrimSpace(message.Text),
+	})
+	if len(state.Messages) > maxGroupContextMessages {
+		state.Messages = state.Messages[len(state.Messages)-maxGroupContextMessages:]
+	}
+	return ingress.WriteJSONFileAtomic(a.groupContextPath(chatID), state)
+}
+
+func (a *Adapter) loadGroupContext(chatID string) (groupContextFile, error) {
+	chatID = strings.TrimSpace(chatID)
+	state, exists, err := ingress.ReadJSONFile(a.groupContextPath(chatID), groupContextFile{})
+	if err != nil {
+		return groupContextFile{}, err
+	}
+	if !exists {
+		return groupContextFile{Version: ingress.CurrentStoreVersion, ChatID: chatID}, nil
+	}
+	if state.Version == 0 {
+		state.Version = ingress.CurrentStoreVersion
+	}
+	if state.ChatID == "" {
+		state.ChatID = chatID
+	}
+	return state, nil
+}
+
+func (a *Adapter) groupContextPath(chatID string) string {
+	name := strings.NewReplacer("/", "_", "\\", "_", ":", "_").Replace(strings.TrimSpace(chatID))
+	if name == "" {
+		name = "unknown"
+	}
+	return filepath.Join(a.paths.TelegramDir, "groups", name+".json")
+}
+
+func isAddressedGroupMessage(message ingress.InboundMessage) bool {
+	text := strings.TrimSpace(strings.ToLower(message.Text))
+	if text == "" {
+		return false
+	}
+	fields := strings.Fields(text)
+	if len(fields) > 0 {
+		first := strings.TrimRight(fields[0], ":,")
+		if first == "/fritz" || strings.HasPrefix(first, "/fritz@") || first == "@fritz" || first == "@fritz_bot" {
+			return true
+		}
+	}
+	return strings.Contains(text, "@fritz ")
+}
+
+func buildGroupPrompt(messages []groupContextMessage, current ingress.InboundMessage) string {
+	var builder strings.Builder
+	builder.WriteString("Telegram group context. Each line is [time] sender: message.\n")
+	for _, message := range messages {
+		text := strings.TrimSpace(message.Text)
+		if text == "" {
+			continue
+		}
+		builder.WriteString("[")
+		builder.WriteString(firstNonEmpty(message.SentAt, "unknown time"))
+		builder.WriteString("] ")
+		builder.WriteString(groupSenderLabel(message))
+		builder.WriteString(": ")
+		builder.WriteString(text)
+		builder.WriteString("\n")
+	}
+	builder.WriteString("\nAddressed request:\n")
+	builder.WriteString(groupSenderLabel(groupContextMessage{
+		UserID:   current.UserID,
+		Username: current.Metadata["from_username"],
+	}))
+	builder.WriteString(": ")
+	builder.WriteString(strings.TrimSpace(current.Text))
+	return builder.String()
+}
+
+func groupSenderLabel(message groupContextMessage) string {
+	switch {
+	case strings.TrimSpace(message.Username) != "" && strings.TrimSpace(message.UserID) != "":
+		return "@" + strings.TrimPrefix(strings.TrimSpace(message.Username), "@") + " (id " + strings.TrimSpace(message.UserID) + ")"
+	case strings.TrimSpace(message.Username) != "":
+		return "@" + strings.TrimPrefix(strings.TrimSpace(message.Username), "@")
+	case strings.TrimSpace(message.UserID) != "":
+		return "id " + strings.TrimSpace(message.UserID)
+	default:
+		return "unknown"
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func (a *Adapter) sendReply(ctx context.Context, chatID string, text string) error {

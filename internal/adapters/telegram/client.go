@@ -46,6 +46,7 @@ type Message struct {
 	MessageID int64     `json:"message_id"`
 	From      *User     `json:"from,omitempty"`
 	Chat      Chat      `json:"chat"`
+	Date      int64     `json:"date,omitempty"`
 	Text      string    `json:"text,omitempty"`
 	Caption   string    `json:"caption,omitempty"`
 	Photo     []Photo   `json:"photo,omitempty"`
