@@ -59,6 +59,7 @@ type groupContextMessage struct {
 	MessageID string `json:"messageId,omitempty"`
 	UserID    string `json:"userId,omitempty"`
 	Username  string `json:"username,omitempty"`
+	Name      string `json:"name,omitempty"`
 	SentAt    string `json:"sentAt,omitempty"`
 	Text      string `json:"text"`
 }
@@ -341,6 +342,9 @@ func normalizeUpdate(update Update, transcript string) (ingress.InboundMessage, 
 		message.UserID = strconv.FormatInt(update.Message.From.ID, 10)
 		if update.Message.From.Username != "" {
 			message.Metadata["from_username"] = update.Message.From.Username
+		}
+		if name := telegramDisplayName(update.Message.From); name != "" {
+			message.Metadata["from_name"] = name
 		}
 	}
 	if update.Message.MessageID != 0 {
@@ -633,6 +637,7 @@ func (a *Adapter) appendGroupContext(message ingress.InboundMessage) error {
 		MessageID: strings.TrimSpace(message.Metadata["message_id"]),
 		UserID:    strings.TrimSpace(message.UserID),
 		Username:  strings.TrimSpace(message.Metadata["from_username"]),
+		Name:      strings.TrimSpace(message.Metadata["from_name"]),
 		SentAt:    firstNonEmpty(strings.TrimSpace(message.Metadata["sent_at"]), time.Now().UTC().Format(time.RFC3339)),
 		Text:      strings.TrimSpace(message.Text),
 	})
@@ -735,6 +740,7 @@ func buildGroupPrompt(messages []groupContextMessage, current ingress.InboundMes
 	builder.WriteString(groupSenderLabel(groupContextMessage{
 		UserID:   current.UserID,
 		Username: current.Metadata["from_username"],
+		Name:     current.Metadata["from_name"],
 	}))
 	builder.WriteString(": ")
 	builder.WriteString(sanitizeTelegramPromptText(stripBotAddress(strings.TrimSpace(current.Text))))
@@ -742,16 +748,25 @@ func buildGroupPrompt(messages []groupContextMessage, current ingress.InboundMes
 }
 
 func groupSenderLabel(message groupContextMessage) string {
+	display := firstNonEmpty(strings.TrimSpace(message.Username), strings.TrimSpace(message.Name))
+	display = strings.TrimPrefix(display, "@")
 	switch {
-	case strings.TrimSpace(message.Username) != "" && strings.TrimSpace(message.UserID) != "":
-		return "user " + strings.TrimPrefix(strings.TrimSpace(message.Username), "@") + " (id " + strings.TrimSpace(message.UserID) + ")"
-	case strings.TrimSpace(message.Username) != "":
-		return "user " + strings.TrimPrefix(strings.TrimSpace(message.Username), "@")
+	case display != "" && strings.TrimSpace(message.UserID) != "":
+		return "user " + display + " (id " + strings.TrimSpace(message.UserID) + ")"
+	case display != "":
+		return "user " + display
 	case strings.TrimSpace(message.UserID) != "":
 		return "id " + strings.TrimSpace(message.UserID)
 	default:
 		return "unknown"
 	}
+}
+
+func telegramDisplayName(user *User) string {
+	if user == nil {
+		return ""
+	}
+	return strings.Join(strings.Fields(strings.TrimSpace(user.FirstName)+" "+strings.TrimSpace(user.LastName)), " ")
 }
 
 func sanitizeTelegramPromptText(text string) string {

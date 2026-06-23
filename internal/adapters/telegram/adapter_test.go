@@ -38,7 +38,7 @@ func TestNormalizeUpdateGroupMessageIncludesMetadata(t *testing.T) {
 		UpdateID: 11,
 		Message: &Message{
 			Chat: Chat{ID: 99, Type: "group", Title: "grp"},
-			From: &User{ID: 5, Username: "alice"},
+			From: &User{ID: 5, Username: "alice", FirstName: "Alice", LastName: "Example"},
 			Text: "photo",
 			Document: &Document{
 				FileName: "x.txt",
@@ -52,7 +52,7 @@ func TestNormalizeUpdateGroupMessageIncludesMetadata(t *testing.T) {
 	if msg.ChatType != ingress.ChatTypeGroup {
 		t.Fatalf("ChatType = %q", msg.ChatType)
 	}
-	if msg.Metadata["chat_title"] != "grp" || msg.Metadata["from_username"] != "alice" || msg.Metadata["document_name"] != "x.txt" {
+	if msg.Metadata["chat_title"] != "grp" || msg.Metadata["from_username"] != "alice" || msg.Metadata["from_name"] != "Alice Example" || msg.Metadata["document_name"] != "x.txt" {
 		t.Fatalf("Metadata = %#v", msg.Metadata)
 	}
 }
@@ -455,7 +455,7 @@ func TestAdapterCachesUnauthorizedGroupContextWithoutTriggering(t *testing.T) {
 			Message: &Message{
 				MessageID: 10,
 				Chat:      Chat{ID: 99, Type: "group"},
-				From:      &User{ID: 7, Username: "chode"},
+				From:      &User{ID: 7, FirstName: "Chode"},
 				Date:      100,
 				Text:      "side comment",
 			},
@@ -478,7 +478,7 @@ func TestAdapterCachesUnauthorizedGroupContextWithoutTriggering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadGroupContext() error = %v", err)
 	}
-	if len(state.Messages) != 1 || state.Messages[0].Text != "side comment" || state.Messages[0].Username != "chode" {
+	if len(state.Messages) != 1 || state.Messages[0].Text != "side comment" || state.Messages[0].Name != "Chode" {
 		t.Fatalf("messages = %#v", state.Messages)
 	}
 
@@ -503,7 +503,7 @@ func TestAdapterCachesUnauthorizedGroupContextWithoutTriggering(t *testing.T) {
 	if handlerWithCapture.calls != 1 {
 		t.Fatalf("calls = %d", handlerWithCapture.calls)
 	}
-	if !strings.Contains(handlerWithCapture.last.Text, "user chode (id 7): side comment") {
+	if !strings.Contains(handlerWithCapture.last.Text, "user Chode (id 7): side comment") {
 		t.Fatalf("decorated prompt = %q", handlerWithCapture.last.Text)
 	}
 }
