@@ -550,6 +550,92 @@ func TestAdapterBuffersGroupContextAndOnlyRepliesWhenAddressed(t *testing.T) {
 	}
 }
 
+func TestSendReplySplitsLongMessages(t *testing.T) {
+	dir := t.TempDir()
+	client := &fakeClient{}
+	handler := fakeHandler{}
+	adapter := NewAdapter(filepath.Join(dir, "telegram"), client, handler, Config{})
+
+	err := adapter.sendReply(context.Background(), "42", strings.Repeat("hello ", 900))
+	if err != nil {
+		t.Fatalf("sendReply() error = %v", err)
+	}
+	if len(client.sent) < 2 {
+		t.Fatalf("sent = %#v", client.sent)
+	}
+	for _, req := range client.sent {
+		if req.ChatID != 42 {
+			t.Fatalf("chat id = %d", req.ChatID)
+		}
+		if len([]rune(req.Text)) > telegramMaxMessageRunes {
+			t.Fatalf("message too long: %d", len([]rune(req.Text)))
+		}
+	}
+}
+
+func TestSendReplyFallsBackToPlainTextWhenHTMLExpansionIsTooLarge(t *testing.T) {
+	dir := t.TempDir()
+	client := &fakeClient{}
+	handler := fakeHandler{}
+	adapter := NewAdapter(filepath.Join(dir, "telegram"), client, handler, Config{})
+
+	err := adapter.sendReply(context.Background(), "42", strings.Repeat("&", telegramReplyChunkRunes))
+	if err != nil {
+		t.Fatalf("sendReply() error = %v", err)
+	}
+	if len(client.sent) != 1 {
+		t.Fatalf("sent = %#v", client.sent)
+	}
+	if client.sent[0].ParseMode != "" {
+		t.Fatalf("parse mode = %q", client.sent[0].ParseMode)
+	}
+	if len([]rune(client.sent[0].Text)) > telegramMaxMessageRunes {
+		t.Fatalf("message too long: %d", len([]rune(client.sent[0].Text)))
+	}
+}
+
+func TestPollOnceSendsErrorReplyWhenHandlerFails(t *testing.T) {
+	dir := t.TempDir()
+	client := &fakeClient{
+		updates: []Update{{
+			UpdateID: 3,
+			Message: &Message{
+				Chat: Chat{ID: 42, Type: "private"},
+				From: &User{ID: 7},
+				Text: "hi",
+			},
+		}},
+	}
+	handler := fakeHandler{err: errors.New("codex request failed")}
+	adapter := NewAdapter(filepath.Join(dir, "telegram"), client, handler, Config{
+		PollTimeout:  time.Second,
+		AllowedUsers: []string{"7"},
+	})
+
+	count, err := adapter.PollOnce(context.Background())
+	if err != nil {
+		t.Fatalf("PollOnce() error = %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("count = %d", count)
+	}
+	if len(client.sent) != 1 || !strings.Contains(client.sent[0].Text, "codex request failed") {
+		t.Fatalf("sent = %#v", client.sent)
+	}
+
+	client.updates = nil
+	again := NewAdapter(filepath.Join(dir, "telegram"), client, handler, Config{
+		PollTimeout:  time.Second,
+		AllowedUsers: []string{"7"},
+	})
+	if _, err := again.PollOnce(context.Background()); err != nil {
+		t.Fatalf("second PollOnce() error = %v", err)
+	}
+	if client.lastOffset != 4 {
+		t.Fatalf("lastOffset = %d", client.lastOffset)
+	}
+}
+
 type fakeClient struct {
 	updates        []Update
 	lastOffset     int64

@@ -89,13 +89,16 @@ func TestCompactionParity(t *testing.T) {
 			chat.Turn{User: "older", Assistant: "a1"},
 			chat.Turn{User: "latest", Assistant: "a2"},
 		)
-		var seen string
+		var seen model.Request
 		customGateway := fakeGatewayWithCapture{capture: &seen, response: "summary"}
 		if _, _, err := Compact(context.Background(), manager, customGateway, "m", 1, "Keep the branch note."); err != nil {
 			t.Fatalf("Compact() error = %v", err)
 		}
-		if !strings.Contains(seen, "Keep the branch note.") {
-			t.Fatalf("prompt = %q", seen)
+		if strings.TrimSpace(seen.SystemPrompt) == "" {
+			t.Fatal("SystemPrompt is empty")
+		}
+		if len(seen.Messages) == 0 || !strings.Contains(seen.Messages[0].Text(), "Keep the branch note.") {
+			t.Fatalf("request = %#v", seen)
 		}
 	})
 
@@ -227,13 +230,13 @@ func TestCompactionParity(t *testing.T) {
 }
 
 type fakeGatewayWithCapture struct {
-	capture  *string
+	capture  *model.Request
 	response string
 }
 
 func (f fakeGatewayWithCapture) Generate(_ context.Context, req model.Request) (model.Response, error) {
-	if f.capture != nil && len(req.Messages) > 0 {
-		*f.capture = req.Messages[0].Text()
+	if f.capture != nil {
+		*f.capture = req
 	}
 	return model.Response{Message: model.TextMessage(model.ModelRole, f.response), Text: f.response}, nil
 }

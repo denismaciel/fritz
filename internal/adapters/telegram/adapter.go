@@ -18,6 +18,9 @@ import (
 
 const maxGroupContextMessages = 80
 const fallbackBotUsername = "fritz"
+const telegramMaxMessageRunes = 4096
+const telegramReplyChunkRunes = 3000
+const telegramPlainChunkRunes = 3900
 
 type Client interface {
 	GetMe(context.Context) (BotInfo, error)
@@ -186,12 +189,12 @@ func (a *Adapter) PollOnce(ctx context.Context) (int, error) {
 		result, err := a.handler.HandleInbound(ctx, message)
 		if err != nil {
 			updateLogger.Error().Err(err).Str("stage", "ingress.handle").Msg("")
-			if nextOffset != offset {
-				if saveErr := a.saveOffset(nextOffset); saveErr != nil {
-					logger.Error().Err(saveErr).Str("stage", "offset.save").Int64("next_offset", nextOffset).Msg("")
-				}
+			if replyErr := a.sendReply(ctx, message.ChatID, telegramErrorReply(err)); replyErr != nil {
+				updateLogger.Error().Err(replyErr).Str("stage", "reply.error").Msg("")
+				return processed, replyErr
 			}
-			return processed, err
+			processed++
+			continue
 		}
 		updateLogger.Info().
 			Str("event", "telegram.update.handled").
@@ -772,9 +775,76 @@ func (a *Adapter) sendReply(ctx context.Context, chatID string, text string) err
 	if err != nil {
 		return fmt.Errorf("invalid telegram chat id %q", chatID)
 	}
-	return a.client.SendMessage(ctx, SendMessageRequest{
-		ChatID:    parsed,
-		Text:      markdownToTelegramHTML(text),
-		ParseMode: "HTML",
-	})
+	for _, chunk := range splitTelegramText(text, telegramReplyChunkRunes) {
+		rendered := markdownToTelegramHTML(chunk)
+		if len([]rune(rendered)) <= telegramMaxMessageRunes {
+			if err := a.client.SendMessage(ctx, SendMessageRequest{
+				ChatID:    parsed,
+				Text:      rendered,
+				ParseMode: "HTML",
+			}); err != nil {
+				return err
+			}
+			continue
+		}
+		for _, plain := range splitTelegramText(chunk, telegramPlainChunkRunes) {
+			if err := a.client.SendMessage(ctx, SendMessageRequest{
+				ChatID: parsed,
+				Text:   plain,
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func splitTelegramText(text string, limit int) []string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return []string{""}
+	}
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return []string{text}
+	}
+
+	var chunks []string
+	for len(runes) > 0 {
+		if len(runes) <= limit {
+			chunks = append(chunks, strings.TrimSpace(string(runes)))
+			break
+		}
+		cut := telegramChunkCut(runes, limit)
+		chunks = append(chunks, strings.TrimSpace(string(runes[:cut])))
+		runes = []rune(strings.TrimSpace(string(runes[cut:])))
+	}
+	return chunks
+}
+
+func telegramErrorReply(err error) string {
+	text := "I hit an internal error while handling that message."
+	if err != nil && strings.TrimSpace(err.Error()) != "" {
+		detail := strings.TrimSpace(err.Error())
+		if len([]rune(detail)) > 1000 {
+			detail = string([]rune(detail)[:1000]) + "..."
+		}
+		text += "\n\n" + detail
+	}
+	return text
+}
+
+func telegramChunkCut(runes []rune, limit int) int {
+	cut := limit
+	for i := limit; i > limit/2; i-- {
+		if runes[i-1] == '\n' {
+			return i
+		}
+	}
+	for i := limit; i > limit/2; i-- {
+		if runes[i-1] == ' ' {
+			return i
+		}
+	}
+	return cut
 }

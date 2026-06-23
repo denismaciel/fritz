@@ -25,6 +25,8 @@ type compactOptions struct {
 	customInstructions string
 }
 
+const compactionSystemPrompt = "You are a precise context compaction assistant. Summarize prior conversation turns for another model so it can continue the same task without losing important decisions, constraints, tool results, file paths, or unresolved work. Return only the compacted summary."
+
 func PrepareCompaction(manager *Manager, keepTurns int) (CompactionPreparation, bool) {
 	context := manager.BuildContext()
 	if keepTurns <= 0 || len(context.Transcript) <= keepTurns {
@@ -204,8 +206,9 @@ func GenerateBranchSummary(
 func summarizeTurns(ctx context.Context, gateway model.Client, modelID string, turns chat.Transcript, customInstructions string) (string, error) {
 	promptText := prompt.BuildCompactionPrompt(turns, customInstructions)
 	response, err := gateway.Generate(ctx, model.Request{
-		ModelID:  modelID,
-		Messages: []model.Message{model.TextMessage(model.UserRole, promptText)},
+		SystemPrompt: compactionSystemPrompt,
+		ModelID:      modelID,
+		Messages:     []model.Message{model.TextMessage(model.UserRole, promptText)},
 	})
 	if err != nil {
 		return "", err
