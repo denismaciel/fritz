@@ -446,15 +446,18 @@ func TestAdapterPairsThenAllowsUser(t *testing.T) {
 	}
 }
 
-func TestAdapterIgnoresUnauthorizedGroup(t *testing.T) {
+func TestAdapterCachesUnauthorizedGroupContextWithoutTriggering(t *testing.T) {
 	dir := t.TempDir()
 	client := &fakeClient{
+		me: BotInfo{Username: "borinho_bot"},
 		updates: []Update{{
 			UpdateID: 1,
 			Message: &Message{
-				Chat: Chat{ID: 99, Type: "group"},
-				From: &User{ID: 7},
-				Text: "hi",
+				MessageID: 10,
+				Chat:      Chat{ID: 99, Type: "group"},
+				From:      &User{ID: 7, Username: "chode"},
+				Date:      100,
+				Text:      "side comment",
 			},
 		}},
 	}
@@ -470,6 +473,38 @@ func TestAdapterIgnoresUnauthorizedGroup(t *testing.T) {
 	}
 	if len(client.sent) != 0 {
 		t.Fatalf("sent = %#v", client.sent)
+	}
+	state, err := adapter.loadGroupContext("99")
+	if err != nil {
+		t.Fatalf("loadGroupContext() error = %v", err)
+	}
+	if len(state.Messages) != 1 || state.Messages[0].Text != "side comment" || state.Messages[0].Username != "chode" {
+		t.Fatalf("messages = %#v", state.Messages)
+	}
+
+	client.updates = []Update{{
+		UpdateID: 2,
+		Message: &Message{
+			MessageID: 11,
+			Chat:      Chat{ID: 99, Type: "group"},
+			From:      &User{ID: 8, Username: "denis"},
+			Date:      101,
+			Text:      "@borinho_bot what did chode say?",
+		},
+	}}
+	handlerWithCapture := &captureHandler{}
+	secondAdapter := NewAdapter(filepath.Join(dir, "telegram"), client, handlerWithCapture, Config{
+		PollTimeout:  time.Second,
+		AllowedUsers: []string{"8"},
+	})
+	if _, err := secondAdapter.PollOnce(context.Background()); err != nil {
+		t.Fatalf("second PollOnce() error = %v", err)
+	}
+	if handlerWithCapture.calls != 1 {
+		t.Fatalf("calls = %d", handlerWithCapture.calls)
+	}
+	if !strings.Contains(handlerWithCapture.last.Text, "user chode (id 7): side comment") {
+		t.Fatalf("decorated prompt = %q", handlerWithCapture.last.Text)
 	}
 }
 

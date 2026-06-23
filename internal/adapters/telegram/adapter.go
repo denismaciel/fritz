@@ -145,6 +145,15 @@ func (a *Adapter) PollOnce(ctx context.Context) (int, error) {
 		}
 		if !allowed {
 			updateLogger.Warn().Str("event", "telegram.auth.denied").Str("chat_id", message.ChatID).Str("user_id", message.UserID).Msg("")
+			if message.ChatType == ingress.ChatTypeGroup {
+				if err := a.appendGroupContext(message); err != nil {
+					updateLogger.Error().Err(err).Str("stage", "group_context.save").Msg("")
+					return processed, err
+				}
+				updateLogger.Debug().Str("event", "telegram.group.context_only").Str("chat_id", message.ChatID).Msg("")
+				processed++
+				continue
+			}
 			if strings.TrimSpace(reply) != "" {
 				if err := a.sendReply(ctx, message.ChatID, reply); err != nil {
 					updateLogger.Error().Err(err).Str("stage", "reply.unauthorized").Msg("")
