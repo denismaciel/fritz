@@ -10,6 +10,7 @@ import (
 	"fritz/internal/config"
 	"fritz/internal/model"
 	"fritz/internal/prompt"
+	"fritz/internal/tool"
 )
 
 type CompactionPreparation struct {
@@ -323,11 +324,11 @@ func fitCompactedMessages(messages []model.Message, targetTokens int) []model.Me
 		if isProtectedCompactionIndex(i, len(out)) || !messageHasToolResult(out[i]) {
 			continue
 		}
-		out[i] = model.TextMessage(out[i].Role, "Earlier tool result omitted after compaction to fit token budget.")
+		out[i] = omitToolResultPayloads(out[i])
 	}
 
 	for i := 1; i < len(out) && model.EstimateMessagesTokens(out) > targetTokens; i++ {
-		if isProtectedCompactionIndex(i, len(out)) {
+		if isProtectedCompactionIndex(i, len(out)) || messageHasToolExchange(out[i]) {
 			continue
 		}
 		tokens := model.EstimateMessageTokens(out[i])
@@ -338,7 +339,7 @@ func fitCompactedMessages(messages []model.Message, targetTokens int) []model.Me
 	}
 
 	for i := 1; i < len(out) && model.EstimateMessagesTokens(out) > targetTokens; i++ {
-		if isProtectedCompactionIndex(i, len(out)) {
+		if isProtectedCompactionIndex(i, len(out)) || messageHasToolExchange(out[i]) {
 			continue
 		}
 		out = append(out[:i], out[i+1:]...)
@@ -346,7 +347,7 @@ func fitCompactedMessages(messages []model.Message, targetTokens int) []model.Me
 	}
 
 	for i := 1; i < len(out) && model.EstimateMessagesTokens(out) > targetTokens; i++ {
-		if isProtectedCompactionIndex(i, len(out)) {
+		if isProtectedCompactionIndex(i, len(out)) && !messageHasToolExchange(out[i]) {
 			out[i] = truncateMessageToTokens(out[i], 24)
 		}
 	}
@@ -369,6 +370,37 @@ func messageHasToolResult(msg model.Message) bool {
 	return false
 }
 
+func messageHasToolCall(msg model.Message) bool {
+	for _, part := range msg.Parts {
+		if part.ToolCall != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func messageHasToolExchange(msg model.Message) bool {
+	return messageHasToolCall(msg) || messageHasToolResult(msg)
+}
+
+func omitToolResultPayloads(msg model.Message) model.Message {
+	parts := make([]model.Part, 0, len(msg.Parts))
+	for _, part := range msg.Parts {
+		if part.ToolResult == nil {
+			parts = append(parts, part)
+			continue
+		}
+		result := *part.ToolResult
+		result.Parts = []tool.ContentPart{tool.TextPart("Earlier tool result omitted after compaction to fit token budget.")}
+		result.Details = nil
+		parts = append(parts, model.Part{ToolResult: &result})
+	}
+	if len(parts) == 0 {
+		return msg
+	}
+	return model.Message{Role: msg.Role, Parts: parts}
+}
+
 func truncateMessageToTokens(msg model.Message, targetTokens int) model.Message {
 	if targetTokens <= 0 || model.EstimateMessageTokens(msg) <= targetTokens {
 		return msg
@@ -376,7 +408,7 @@ func truncateMessageToTokens(msg model.Message, targetTokens int) model.Message 
 	text := strings.TrimSpace(msg.Text())
 	if text == "" {
 		if messageHasToolResult(msg) {
-			return model.TextMessage(msg.Role, "Earlier tool result omitted after compaction to fit token budget.")
+			return omitToolResultPayloads(msg)
 		}
 		return msg
 	}

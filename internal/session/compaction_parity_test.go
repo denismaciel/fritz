@@ -84,6 +84,80 @@ func TestCompactionParity(t *testing.T) {
 		}
 	})
 
+	t.Run("build_token_limited_compacted_history_preserves_tool_result_parts", func(t *testing.T) {
+		manager := seededInMemoryManager(t,
+			chat.Turn{User: "older", Assistant: "a1"},
+		)
+		call := tool.Call{ID: "call-preserve", Name: "read", Args: map[string]any{"path": "README.md"}}
+		if _, err := manager.AppendPrompt("read it"); err != nil {
+			t.Fatalf("AppendPrompt() error = %v", err)
+		}
+		if _, err := manager.AppendModelResponse(model.Response{
+			Message: model.Message{
+				Role:  model.ModelRole,
+				Parts: []model.Part{{ToolCall: &call}},
+			},
+			ToolCalls: []tool.Call{call},
+		}); err != nil {
+			t.Fatalf("AppendModelResponse() error = %v", err)
+		}
+		if _, err := manager.AppendToolResult("tool output", model.Message{
+			Role: model.UserRole,
+			Parts: []model.Part{{
+				ToolResult: &tool.Result{
+					CallID: call.ID,
+					Name:   call.Name,
+					Parts:  []tool.ContentPart{tool.TextPart(strings.Repeat("x", 2000))},
+					Details: tool.ReadResultDetails{
+						Truncation: &tool.TruncationResult{Truncated: true, TotalBytes: 2000, OutputBytes: 100},
+					},
+				},
+			}},
+		}); err != nil {
+			t.Fatalf("AppendToolResult() error = %v", err)
+		}
+		if _, err := manager.AppendModelResponse(model.Response{Message: model.TextMessage(model.ModelRole, "done"), Text: "done"}); err != nil {
+			t.Fatalf("AppendModelResponse() error = %v", err)
+		}
+		if _, err := manager.AppendPrompt("latest"); err != nil {
+			t.Fatalf("AppendPrompt() error = %v", err)
+		}
+		if _, err := manager.AppendModelResponse(model.Response{Message: model.TextMessage(model.ModelRole, "latest done"), Text: "latest done"}); err != nil {
+			t.Fatalf("AppendModelResponse() error = %v", err)
+		}
+
+		if _, _, err := compactWithOptions(context.Background(), manager, fakeGateway{response: "summary"}, "m", compactOptions{
+			keepTurns:    2,
+			targetTokens: 160,
+		}); err != nil {
+			t.Fatalf("compactWithOptions() error = %v", err)
+		}
+		entry := latestCompactionEntry(t, manager)
+		var foundCall, foundResult bool
+		for _, msg := range entry.ReplacementMessages {
+			for _, part := range msg.Parts {
+				if part.ToolCall != nil && part.ToolCall.ID == call.ID {
+					foundCall = true
+				}
+				if part.ToolResult != nil && part.ToolResult.CallID == call.ID {
+					foundResult = true
+					if got := part.ToolResult.Text(); !strings.Contains(got, "Earlier tool result omitted") {
+						t.Fatalf("tool result text = %q", got)
+					}
+					if part.ToolResult.Name != call.Name {
+						t.Fatalf("tool result name = %q", part.ToolResult.Name)
+					}
+					if part.ToolResult.Details != nil {
+						t.Fatalf("tool result details were not omitted: %#v", part.ToolResult.Details)
+					}
+				}
+			}
+		}
+		if !foundCall || !foundResult {
+			t.Fatalf("foundCall=%v foundResult=%v replacementMessages=%#v", foundCall, foundResult, entry.ReplacementMessages)
+		}
+	})
+
 	t.Run("manual_compact_uses_custom_prompt", func(t *testing.T) {
 		manager := seededInMemoryManager(t,
 			chat.Turn{User: "older", Assistant: "a1"},
