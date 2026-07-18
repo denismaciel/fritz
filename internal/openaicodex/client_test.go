@@ -153,3 +153,12 @@ func TestDecodeSSEBuildsResponse(t *testing.T) {
 		t.Fatalf("ReasoningText() = %q", resp.Message.ReasoningText())
 	}
 }
+
+func TestDecodeSSEReturnsNestedCodexError(t *testing.T) {
+	body := "data: {\"type\":\"error\",\"error\":{\"type\":\"server_error\",\"message\":\"internal failure\"}}\n\n"
+
+	_, err := decodeSSE(strings.NewReader(body), nil)
+	if err == nil || err.Error() != "codex error: internal failure" {
+		t.Fatalf("decodeSSE() error = %v", err)
+	}
+}

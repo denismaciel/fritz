@@ -110,6 +110,27 @@ func TestAdapterPollOnceTranscribesVoiceMessage(t *testing.T) {
 	}
 }
 
+func TestAdapterPollOnceClearsSession(t *testing.T) {
+	dir := t.TempDir()
+	client := &fakeClient{updates: []Update{{
+		UpdateID: 3,
+		Message:  &Message{Chat: Chat{ID: 42, Type: "private"}, From: &User{ID: 7}, Text: "/clear"},
+	}}}
+	handler := &clearingHandler{}
+	adapter := NewAdapter(filepath.Join(dir, "telegram"), client, handler, Config{AllowedUsers: []string{"7"}})
+
+	count, err := adapter.PollOnce(context.Background())
+	if err != nil {
+		t.Fatalf("PollOnce() error = %v", err)
+	}
+	if count != 1 || handler.sessionKey != "telegram:dm:7" {
+		t.Fatalf("count = %d, sessionKey = %q", count, handler.sessionKey)
+	}
+	if len(client.sent) != 1 || client.sent[0].Text != "history cleared" {
+		t.Fatalf("sent = %#v", client.sent)
+	}
+}
+
 func TestAdapterPollOnceKeepsCaptionAndTranscriptForVoiceMessage(t *testing.T) {
 	dir := t.TempDir()
 	client := &fakeClient{
@@ -720,6 +741,19 @@ func (f *fakeClient) DownloadFile(_ context.Context, filePath string) ([]byte, e
 type fakeHandler struct {
 	result ingress.HandleResult
 	err    error
+}
+
+type clearingHandler struct {
+	sessionKey string
+}
+
+func (h *clearingHandler) HandleInbound(context.Context, ingress.InboundMessage) (ingress.HandleResult, error) {
+	return ingress.HandleResult{}, nil
+}
+
+func (h *clearingHandler) ClearSessionKey(_ context.Context, sessionKey string) error {
+	h.sessionKey = sessionKey
+	return nil
 }
 
 func (f fakeHandler) HandleInbound(_ context.Context, _ ingress.InboundMessage) (ingress.HandleResult, error) {

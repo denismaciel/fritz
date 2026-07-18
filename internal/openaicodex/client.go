@@ -405,7 +405,7 @@ func consumeSSEChunk(
 	eventType, _ := event["type"].(string)
 	switch eventType {
 	case "error":
-		return fmt.Errorf("codex error: %v", event["message"])
+		return fmt.Errorf("codex error: %s", codexErrorMessage(event))
 	case "response.failed":
 		if resp, _ := event["response"].(map[string]any); resp != nil {
 			if errPayload, _ := resp["error"].(map[string]any); errPayload != nil {
@@ -481,6 +481,33 @@ func consumeSSEChunk(
 		}
 	}
 	return nil
+}
+
+func codexErrorMessage(event map[string]any) string {
+	for _, value := range []any{event["message"], event["error"], event["response"]} {
+		if message := nestedErrorMessage(value); message != "" {
+			return message
+		}
+	}
+	data, err := json.Marshal(event)
+	if err == nil && len(data) > 0 {
+		return string(data)
+	}
+	return "unknown error"
+}
+
+func nestedErrorMessage(value any) string {
+	switch value := value.(type) {
+	case string:
+		return strings.TrimSpace(value)
+	case map[string]any:
+		for _, key := range []string{"message", "detail", "error", "code", "type"} {
+			if message := nestedErrorMessage(value[key]); message != "" {
+				return message
+			}
+		}
+	}
+	return ""
 }
 
 func partialToolFromItem(item map[string]any, current *partialToolCall) tool.Call {

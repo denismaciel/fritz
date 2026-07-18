@@ -34,6 +34,10 @@ type Handler interface {
 	HandleInbound(context.Context, ingress.InboundMessage) (ingress.HandleResult, error)
 }
 
+type sessionClearer interface {
+	ClearSessionKey(context.Context, string) error
+}
+
 type Adapter struct {
 	paths       ingress.StatePaths
 	client      Client
@@ -191,6 +195,24 @@ func (a *Adapter) PollOnce(ctx context.Context) (int, error) {
 			updateLogger.Info().Str("event", "telegram.auth.paired").Str("chat_id", message.ChatID).Str("user_id", message.UserID).Msg("")
 			if err := a.sendReply(ctx, message.ChatID, reply); err != nil {
 				updateLogger.Error().Err(err).Str("stage", "reply.paired").Msg("")
+				return processed, err
+			}
+			processed++
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(message.Text), "/clear") {
+			clearer, ok := a.handler.(sessionClearer)
+			if !ok {
+				return processed, fmt.Errorf("telegram handler does not support clearing sessions")
+			}
+			sessionKey, err := (ingress.DefaultRouter{}).SessionKey(message)
+			if err != nil {
+				return processed, err
+			}
+			if err := clearer.ClearSessionKey(ctx, sessionKey); err != nil {
+				return processed, err
+			}
+			if err := a.sendReply(ctx, message.ChatID, "history cleared"); err != nil {
 				return processed, err
 			}
 			processed++
