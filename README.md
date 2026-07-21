@@ -78,3 +78,13 @@ Current behavior:
 - streamed Slack replies via `chat.startStream` / `chat.appendStream` / `chat.stopStream`
 - run-scoped file upload via Slack external upload APIs
 - native `/clear` session reset
+
+## Telegram training plan command
+
+Set `FRITZ_TRAINING_DB` (or `telegram.trainingDbPath` in config) to a Fritz
+training SQLite database. Authorized users then get native, model-free commands:
+
+- `/training` or `/training today` — today's workout, including structured steps
+- `/training week` or `/training_week` — the current Monday-Sunday plan
+
+The gateway registers these commands in the bot's Telegram command menu at startup.

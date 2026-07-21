@@ -58,11 +58,12 @@ type PromptConfig struct {
 }
 
 type TelegramConfig struct {
-	BotToken     string
-	Endpoint     string
-	PollTimeout  time.Duration
-	PairingToken string
-	AllowedUsers []string
+	BotToken       string
+	Endpoint       string
+	PollTimeout    time.Duration
+	PairingToken   string
+	AllowedUsers   []string
+	TrainingDBPath string
 }
 
 type SlackConfig struct {
@@ -130,11 +131,12 @@ type PromptConfigSource struct {
 }
 
 type TelegramConfigSource struct {
-	BotToken     string
-	Endpoint     string
-	PollTimeout  *time.Duration
-	PairingToken string
-	AllowedUsers []string
+	BotToken       string
+	Endpoint       string
+	PollTimeout    *time.Duration
+	PairingToken   string
+	AllowedUsers   []string
+	TrainingDBPath string
 }
 
 type SlackConfigSource struct {
@@ -268,9 +270,10 @@ func LoadEnv() Source {
 		OpenAICodexOriginator:  strings.TrimSpace(os.Getenv("FRITZ_OPENAI_CODEX_ORIGINATOR")),
 		OpenAICodexRedirectURL: strings.TrimSpace(os.Getenv("FRITZ_OPENAI_CODEX_REDIRECT_URL")),
 		Telegram: TelegramConfigSource{
-			BotToken:     strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
-			Endpoint:     strings.TrimSpace(os.Getenv("FRITZ_TELEGRAM_ENDPOINT")),
-			PairingToken: strings.TrimSpace(os.Getenv("FRITZ_TELEGRAM_PAIRING_TOKEN")),
+			BotToken:       strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
+			Endpoint:       strings.TrimSpace(os.Getenv("FRITZ_TELEGRAM_ENDPOINT")),
+			PairingToken:   strings.TrimSpace(os.Getenv("FRITZ_TELEGRAM_PAIRING_TOKEN")),
+			TrainingDBPath: strings.TrimSpace(os.Getenv("FRITZ_TRAINING_DB")),
 		},
 		Slack: SlackConfigSource{
 			BotToken: strings.TrimSpace(os.Getenv("SLACK_BOT_TOKEN")),
@@ -475,6 +478,13 @@ func Resolve(s Sources) Runtime {
 				s.File.Telegram.AllowedUsers,
 				s.Env.Telegram.AllowedUsers,
 				s.Flags.Telegram.AllowedUsers,
+			),
+			TrainingDBPath: firstNonEmpty(
+				s.Flags.Telegram.TrainingDBPath,
+				s.Env.Telegram.TrainingDBPath,
+				s.File.Telegram.TrainingDBPath,
+				s.GlobalFile.Telegram.TrainingDBPath,
+				s.Defaults.Telegram.TrainingDBPath,
 			),
 		},
 		Slack: SlackConfig{
@@ -821,11 +831,12 @@ type fileConfig struct {
 }
 
 type fileTelegramConfig struct {
-	BotToken     string   `json:"botToken"`
-	Endpoint     string   `json:"endpoint"`
-	PollTimeout  string   `json:"pollTimeout"`
-	PairingToken string   `json:"pairingToken"`
-	AllowedUsers []string `json:"allowedUsers"`
+	BotToken       string   `json:"botToken"`
+	Endpoint       string   `json:"endpoint"`
+	PollTimeout    string   `json:"pollTimeout"`
+	PairingToken   string   `json:"pairingToken"`
+	AllowedUsers   []string `json:"allowedUsers"`
+	TrainingDBPath string   `json:"trainingDbPath"`
 }
 
 type fileSlackConfig struct {
@@ -884,10 +895,11 @@ func (f fileConfig) toSource() (Source, error) {
 		OpenAICodexOriginator:    strings.TrimSpace(f.OpenAICodexOriginator),
 		OpenAICodexRedirectURL:   strings.TrimSpace(f.OpenAICodexRedirectURL),
 		Telegram: TelegramConfigSource{
-			BotToken:     strings.TrimSpace(f.Telegram.BotToken),
-			Endpoint:     strings.TrimSpace(f.Telegram.Endpoint),
-			PairingToken: strings.TrimSpace(f.Telegram.PairingToken),
-			AllowedUsers: compactStrings(f.Telegram.AllowedUsers),
+			BotToken:       strings.TrimSpace(f.Telegram.BotToken),
+			Endpoint:       strings.TrimSpace(f.Telegram.Endpoint),
+			PairingToken:   strings.TrimSpace(f.Telegram.PairingToken),
+			AllowedUsers:   compactStrings(f.Telegram.AllowedUsers),
+			TrainingDBPath: strings.TrimSpace(f.Telegram.TrainingDBPath),
 		},
 		Slack: SlackConfigSource{
 			BotToken:        strings.TrimSpace(f.Slack.BotToken),

@@ -37,6 +37,7 @@ type ConfigOptions struct {
 	TelegramPollTimeout    *time.Duration
 	TelegramPairingToken   string
 	TelegramAllowedUsers   []string
+	TelegramTrainingDBPath string
 	SlackBotToken          string
 	SlackAppToken          string
 	SlackEndpoint          string
@@ -350,6 +351,12 @@ func parseOptions(args []string) (SessionOptions, ConfigOptions, []string, error
 			}
 			i++
 			cfg.TelegramAllowedUsers = append(cfg.TelegramAllowedUsers, args[i])
+		case "--telegram-training-db":
+			if i+1 >= len(args) {
+				return SessionOptions{}, ConfigOptions{}, nil, errors.New("missing telegram training database path")
+			}
+			i++
+			cfg.TelegramTrainingDBPath = args[i]
 		case "--slack-bot-token":
 			if i+1 >= len(args) {
 				return SessionOptions{}, ConfigOptions{}, nil, errors.New("missing slack bot token")

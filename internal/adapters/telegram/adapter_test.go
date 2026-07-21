@@ -131,6 +131,94 @@ func TestAdapterPollOnceClearsSession(t *testing.T) {
 	}
 }
 
+func TestAdapterPollOnceHandlesTrainingCommandsWithoutModel(t *testing.T) {
+	dir := t.TempDir()
+	client := &fakeClient{updates: []Update{
+		{
+			UpdateID: 3,
+			Message:  &Message{Chat: Chat{ID: 42, Type: "private"}, From: &User{ID: 7}, Text: "/training today"},
+		},
+		{
+			UpdateID: 4,
+			Message:  &Message{Chat: Chat{ID: 42, Type: "private"}, From: &User{ID: 7}, Text: "/training for the week"},
+		},
+	}}
+	handler := &countingHandler{}
+	training := &fakeTrainingProvider{today: "today plan", week: "week plan"}
+	adapter := NewAdapter(filepath.Join(dir, "telegram"), client, handler, Config{
+		AllowedUsers: []string{"7"},
+		Training:     training,
+	})
+
+	count, err := adapter.PollOnce(context.Background())
+	if err != nil {
+		t.Fatalf("PollOnce() error = %v", err)
+	}
+	if count != 2 || handler.calls != 0 {
+		t.Fatalf("count = %d, handler calls = %d", count, handler.calls)
+	}
+	if training.todayCalls != 1 || training.weekCalls != 1 {
+		t.Fatalf("training calls = today %d, week %d", training.todayCalls, training.weekCalls)
+	}
+	if len(client.sent) != 2 || client.sent[0].Text != "today plan" || client.sent[1].Text != "week plan" {
+		t.Fatalf("sent = %#v", client.sent)
+	}
+}
+
+func TestAdapterTrainingCommandTargetsThisBotInGroup(t *testing.T) {
+	dir := t.TempDir()
+	client := &fakeClient{
+		me: BotInfo{Username: "denis_fritz_bot"},
+		updates: []Update{
+			{
+				UpdateID: 3,
+				Message: &Message{
+					Chat: Chat{ID: 42, Type: "group"}, From: &User{ID: 7}, Text: "/training@other_bot week",
+				},
+			},
+			{
+				UpdateID: 4,
+				Message: &Message{
+					Chat: Chat{ID: 42, Type: "group"}, From: &User{ID: 7}, Text: "/training@denis_fritz_bot week",
+				},
+			},
+		},
+	}
+	training := &fakeTrainingProvider{week: "week plan"}
+	adapter := NewAdapter(filepath.Join(dir, "telegram"), client, &countingHandler{}, Config{
+		AllowedUsers: []string{"7"},
+		Training:     training,
+	})
+
+	count, err := adapter.PollOnce(context.Background())
+	if err != nil {
+		t.Fatalf("PollOnce() error = %v", err)
+	}
+	if count != 2 || training.weekCalls != 1 {
+		t.Fatalf("count = %d, week calls = %d", count, training.weekCalls)
+	}
+	if len(client.sent) != 1 || client.sent[0].Text != "week plan" {
+		t.Fatalf("sent = %#v", client.sent)
+	}
+}
+
+func TestAdapterConfiguresTelegramCommandMenu(t *testing.T) {
+	client := &fakeClient{}
+	adapter := NewAdapter(filepath.Join(t.TempDir(), "telegram"), client, &countingHandler{}, Config{
+		Training: &fakeTrainingProvider{},
+	})
+
+	if err := adapter.ConfigureCommands(context.Background()); err != nil {
+		t.Fatalf("ConfigureCommands() error = %v", err)
+	}
+	if len(client.commands) != 3 {
+		t.Fatalf("commands = %#v", client.commands)
+	}
+	if client.commands[1].Command != "training" || client.commands[2].Command != "training_week" {
+		t.Fatalf("commands = %#v", client.commands)
+	}
+}
+
 func TestAdapterPollOnceKeepsCaptionAndTranscriptForVoiceMessage(t *testing.T) {
 	dir := t.TempDir()
 	client := &fakeClient{
@@ -701,6 +789,7 @@ type fakeClient struct {
 	filePathByID   map[string]string
 	fileBodyByPath map[string][]byte
 	me             BotInfo
+	commands       []BotCommand
 }
 
 func (f *fakeClient) GetMe(context.Context) (BotInfo, error) {
@@ -719,6 +808,11 @@ func (f *fakeClient) GetUpdates(_ context.Context, req GetUpdatesRequest) ([]Upd
 
 func (f *fakeClient) SendMessage(_ context.Context, req SendMessageRequest) error {
 	f.sent = append(f.sent, req)
+	return nil
+}
+
+func (f *fakeClient) SetMyCommands(_ context.Context, req SetMyCommandsRequest) error {
+	f.commands = append([]BotCommand(nil), req.Commands...)
 	return nil
 }
 
@@ -741,6 +835,24 @@ func (f *fakeClient) DownloadFile(_ context.Context, filePath string) ([]byte, e
 type fakeHandler struct {
 	result ingress.HandleResult
 	err    error
+}
+
+type fakeTrainingProvider struct {
+	today      string
+	week       string
+	err        error
+	todayCalls int
+	weekCalls  int
+}
+
+func (f *fakeTrainingProvider) Today(context.Context, time.Time) (string, error) {
+	f.todayCalls++
+	return f.today, f.err
+}
+
+func (f *fakeTrainingProvider) Week(context.Context, time.Time) (string, error) {
+	f.weekCalls++
+	return f.week, f.err
 }
 
 type clearingHandler struct {

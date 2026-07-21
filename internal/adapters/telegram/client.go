@@ -43,6 +43,15 @@ type SendMessageRequest struct {
 	ParseMode string `json:"parse_mode,omitempty"`
 }
 
+type BotCommand struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
+type SetMyCommandsRequest struct {
+	Commands []BotCommand `json:"commands"`
+}
+
 type Update struct {
 	UpdateID int64    `json:"update_id"`
 	Message  *Message `json:"message,omitempty"`
@@ -134,6 +143,11 @@ func (c *HTTPClient) GetMe(ctx context.Context) (BotInfo, error) {
 func (c *HTTPClient) SendMessage(ctx context.Context, req SendMessageRequest) error {
 	var response apiResponse[json.RawMessage]
 	return c.post(ctx, "sendMessage", req, &response)
+}
+
+func (c *HTTPClient) SetMyCommands(ctx context.Context, req SetMyCommandsRequest) error {
+	var response apiResponse[json.RawMessage]
+	return c.post(ctx, "setMyCommands", req, &response)
 }
 
 func (c *HTTPClient) GetFile(ctx context.Context, fileID string) (File, error) {

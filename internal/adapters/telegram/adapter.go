@@ -38,6 +38,15 @@ type sessionClearer interface {
 	ClearSessionKey(context.Context, string) error
 }
 
+type TrainingProvider interface {
+	Today(context.Context, time.Time) (string, error)
+	Week(context.Context, time.Time) (string, error)
+}
+
+type commandConfigurer interface {
+	SetMyCommands(context.Context, SetMyCommandsRequest) error
+}
+
 type Adapter struct {
 	paths       ingress.StatePaths
 	client      Client
@@ -51,6 +60,7 @@ type Config struct {
 	PairingToken string
 	AllowedUsers []string
 	Transcriber  transcription.Service
+	Training     TrainingProvider
 }
 
 type groupContextFile struct {
@@ -168,6 +178,31 @@ func (a *Adapter) PollOnce(ctx context.Context) (int, error) {
 			processed++
 			continue
 		}
+		if handled, commandReply, commandErr := a.trainingCommand(ctx, message.Text); handled {
+			if commandErr != nil {
+				updateLogger.Error().Err(commandErr).Str("stage", "training.read").Msg("")
+				commandReply = "I couldn't read the training plan right now.\n\n" + commandErr.Error()
+			}
+			if err := a.sendReply(ctx, message.ChatID, commandReply); err != nil {
+				updateLogger.Error().Err(err).Str("stage", "reply.training").Msg("")
+				return processed, err
+			}
+			if message.ChatType == ingress.ChatTypeGroup {
+				_ = a.appendGroupContext(message)
+				_ = a.appendGroupContext(ingress.InboundMessage{
+					ChatType: message.ChatType,
+					ChatID:   message.ChatID,
+					UserID:   "fritz",
+					Text:     commandReply,
+					Metadata: map[string]string{
+						"from_username": "fritz",
+						"sent_at":       time.Now().UTC().Format(time.RFC3339),
+					},
+				})
+			}
+			processed++
+			continue
+		}
 		if message.ChatType == ingress.ChatTypeGroup {
 			originalMessage := message
 			addressed := a.isAddressedGroupMessage(ctx, message)
@@ -269,6 +304,9 @@ func (a *Adapter) PollOnce(ctx context.Context) (int, error) {
 func (a *Adapter) Run(ctx context.Context) error {
 	logger := logx.Component("telegram")
 	logger.Info().Str("event", "telegram.run.start").Msg("")
+	if err := a.ConfigureCommands(ctx); err != nil {
+		logger.Warn().Err(err).Str("event", "telegram.commands.configure.error").Msg("")
+	}
 	for {
 		if ctx.Err() != nil {
 			return nil
@@ -281,6 +319,109 @@ func (a *Adapter) Run(ctx context.Context) error {
 			return err
 		}
 	}
+}
+
+func (a *Adapter) ConfigureCommands(ctx context.Context) error {
+	client, ok := a.client.(commandConfigurer)
+	if !ok {
+		return nil
+	}
+	commands := []BotCommand{{Command: "clear", Description: "Clear conversation history"}}
+	if a.cfg.Training != nil {
+		commands = append(commands,
+			BotCommand{Command: "training", Description: "Show today's training"},
+			BotCommand{Command: "training_week", Description: "Show this week's training"},
+		)
+	}
+	return client.SetMyCommands(ctx, SetMyCommandsRequest{Commands: commands})
+}
+
+func (a *Adapter) trainingCommand(ctx context.Context, text string) (bool, string, error) {
+	if a.cfg.Training == nil {
+		return false, "", nil
+	}
+	fields := strings.Fields(strings.TrimSpace(text))
+	if len(fields) == 0 {
+		return false, "", nil
+	}
+	command, target, ok := parseBotCommand(fields[0])
+	if !ok {
+		return false, "", nil
+	}
+	if target != "" && !a.isBotAddress(ctx, target) {
+		return false, "", nil
+	}
+
+	scope := ""
+	switch command {
+	case "training":
+		if len(fields) == 1 {
+			scope = "today"
+		} else {
+			scope = strings.ToLower(strings.TrimSpace(strings.Join(fields[1:], " ")))
+		}
+	case "training_today":
+		if len(fields) == 1 {
+			scope = "today"
+		}
+	case "training_week":
+		if len(fields) == 1 {
+			scope = "week"
+		}
+	default:
+		return false, "", nil
+	}
+
+	now := time.Now()
+	switch scope {
+	case "today":
+		text, err := callTrainingProvider(func() (string, error) {
+			return a.cfg.Training.Today(ctx, now)
+		})
+		return true, text, err
+	case "week", "weekly", "this week", "this-week", "this_week", "for week", "for the week":
+		text, err := callTrainingProvider(func() (string, error) {
+			return a.cfg.Training.Week(ctx, now)
+		})
+		return true, text, err
+	default:
+		return true, "Usage: /training [today|week]", nil
+	}
+}
+
+func callTrainingProvider(call func() (string, error)) (string, error) {
+	text, err := call()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(text), nil
+}
+
+func parseBotCommand(value string) (command string, target string, ok bool) {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if !strings.HasPrefix(value, "/") {
+		return "", "", false
+	}
+	value = strings.TrimPrefix(value, "/")
+	parts := strings.SplitN(value, "@", 2)
+	command = strings.TrimSpace(parts[0])
+	if len(parts) == 2 {
+		target = strings.TrimSpace(parts[1])
+		if target == "" {
+			return "", "", false
+		}
+	}
+	return command, target, command != ""
+}
+
+func (a *Adapter) isBotAddress(ctx context.Context, target string) bool {
+	target = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(target), "@"))
+	for _, name := range a.botAddressNames(ctx) {
+		if target == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *Adapter) authorize(

@@ -39,6 +39,7 @@ import (
 	"fritz/internal/session"
 	"fritz/internal/terminalui"
 	"fritz/internal/tool"
+	"fritz/internal/trainingplan"
 	transcriptiongemini "fritz/internal/transcription/gemini"
 	"golang.org/x/term"
 )
@@ -564,6 +565,7 @@ func printGatewayUsage(out io.Writer) {
 	fmt.Fprintln(out, "  --telegram-poll-timeout <duration>")
 	fmt.Fprintln(out, "  --telegram-pairing-token <token>")
 	fmt.Fprintln(out, "  --telegram-allow-user <id>")
+	fmt.Fprintln(out, "  --telegram-training-db <path>")
 	fmt.Fprintln(out, "  --heartbeat=<bool>")
 	fmt.Fprintln(out, "  --heartbeat-interval <duration>")
 	fmt.Fprintln(out, "  --log-file <path>")
@@ -618,11 +620,12 @@ func configSourceFromCommand(options command.ConfigOptions) config.Source {
 		OpenAICodexOriginator:  options.OpenAICodexOriginator,
 		OpenAICodexRedirectURL: options.OpenAICodexRedirectURL,
 		Telegram: config.TelegramConfigSource{
-			BotToken:     options.TelegramBotToken,
-			Endpoint:     options.TelegramEndpoint,
-			PollTimeout:  options.TelegramPollTimeout,
-			PairingToken: options.TelegramPairingToken,
-			AllowedUsers: append([]string(nil), options.TelegramAllowedUsers...),
+			BotToken:       options.TelegramBotToken,
+			Endpoint:       options.TelegramEndpoint,
+			PollTimeout:    options.TelegramPollTimeout,
+			PairingToken:   options.TelegramPairingToken,
+			AllowedUsers:   append([]string(nil), options.TelegramAllowedUsers...),
+			TrainingDBPath: options.TelegramTrainingDBPath,
 		},
 		Slack: config.SlackConfigSource{
 			BotToken:        options.SlackBotToken,
@@ -865,10 +868,15 @@ func runTelegram(
 		}()
 	}
 	client := telegram.NewHTTPClient(http.DefaultClient, cfg.Telegram.Endpoint, cfg.Telegram.BotToken)
+	var training telegram.TrainingProvider
+	if path := strings.TrimSpace(cfg.Telegram.TrainingDBPath); path != "" {
+		training = trainingplan.NewReader(path)
+	}
 	adapter := telegram.NewAdapterWithPaths(gw.Paths(), client, gw, telegram.Config{
 		PollTimeout:  cfg.Telegram.PollTimeout,
 		PairingToken: cfg.Telegram.PairingToken,
 		AllowedUsers: append([]string(nil), cfg.Telegram.AllowedUsers...),
+		Training:     training,
 		Transcriber: transcriptiongemini.NewClient(
 			cfg.GeminiAPIKey,
 			transcriptiongemini.WithEndpoint(cfg.GeminiEndpoint),

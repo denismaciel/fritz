@@ -114,6 +114,7 @@ func TestParse(t *testing.T) {
 				"--telegram-pairing-token", "pair-secret",
 				"--telegram-allow-user", "7",
 				"--telegram-allow-user", "8",
+				"--telegram-training-db", "/data/training.db",
 				"--heartbeat=true",
 				"--heartbeat-interval", "2m",
 				"--log-file", "/tmp/agent.jsonl",
@@ -150,6 +151,7 @@ func TestParse(t *testing.T) {
 					TelegramPollTimeout:    durationPtr(25 * time.Second),
 					TelegramPairingToken:   "pair-secret",
 					TelegramAllowedUsers:   []string{"7", "8"},
+					TelegramTrainingDBPath: "/data/training.db",
 					HeartbeatEnabled:       boolPtr(true),
 					HeartbeatInterval:      durationPtr(2 * time.Minute),
 					LogFile:                "/tmp/agent.jsonl",
@@ -256,6 +258,11 @@ func TestParseErrors(t *testing.T) {
 			name:    "missing telegram pairing token",
 			args:    []string{"--telegram-pairing-token"},
 			wantErr: "missing telegram pairing token",
+		},
+		{
+			name:    "missing telegram training database path",
+			args:    []string{"--telegram-training-db"},
+			wantErr: "missing telegram training database path",
 		},
 		{
 			name:    "invalid telegram poll timeout",

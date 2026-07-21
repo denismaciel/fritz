@@ -62,8 +62,9 @@ func TestResolveMergesSources(t *testing.T) {
 			OpenAICodexOriginator:  "fritz-test",
 			OpenAICodexRedirectURL: "http://localhost:2455/auth/callback",
 			Telegram: TelegramConfigSource{
-				PairingToken: "flag-pair",
-				AllowedUsers: []string{"7", "8"},
+				PairingToken:   "flag-pair",
+				AllowedUsers:   []string{"7", "8"},
+				TrainingDBPath: "/tmp/training.db",
 			},
 			Heartbeat: HeartbeatConfigSource{
 				Interval: durationPtr(2 * time.Minute),
@@ -110,6 +111,9 @@ func TestResolveMergesSources(t *testing.T) {
 	}
 	if !reflect.DeepEqual(runtime.Telegram.AllowedUsers, []string{"7", "8"}) {
 		t.Fatalf("Telegram.AllowedUsers = %#v", runtime.Telegram.AllowedUsers)
+	}
+	if runtime.Telegram.TrainingDBPath != "/tmp/training.db" {
+		t.Fatalf("Telegram.TrainingDBPath = %q", runtime.Telegram.TrainingDBPath)
 	}
 	if !runtime.Heartbeat.Enabled || runtime.Heartbeat.Interval != 2*time.Minute {
 		t.Fatalf("Heartbeat = %#v", runtime.Heartbeat)
@@ -254,6 +258,15 @@ func TestRuntimeValidateTelegram(t *testing.T) {
 	}
 }
 
+func TestLoadEnvReadsTrainingDatabasePath(t *testing.T) {
+	t.Setenv("FRITZ_TRAINING_DB", " /data/training.db ")
+
+	source := LoadEnv()
+	if source.Telegram.TrainingDBPath != "/data/training.db" {
+		t.Fatalf("Telegram.TrainingDBPath = %q", source.Telegram.TrainingDBPath)
+	}
+}
+
 func TestLoadFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
@@ -273,7 +286,8 @@ func TestLoadFile(t *testing.T) {
     "endpoint": "https://telegram.test",
     "pollTimeout": "21s",
     "pairingToken": "secret",
-    "allowedUsers": ["7", "8"]
+    "allowedUsers": ["7", "8"],
+    "trainingDbPath": "/data/training.db"
   },
   "heartbeat": {
     "enabled": true,
@@ -351,6 +365,9 @@ func TestLoadFile(t *testing.T) {
 	}
 	if !reflect.DeepEqual(source.Telegram.AllowedUsers, []string{"7", "8"}) {
 		t.Fatalf("Telegram.AllowedUsers = %#v", source.Telegram.AllowedUsers)
+	}
+	if source.Telegram.TrainingDBPath != "/data/training.db" {
+		t.Fatalf("Telegram.TrainingDBPath = %q", source.Telegram.TrainingDBPath)
 	}
 	if source.Heartbeat.Enabled == nil || !*source.Heartbeat.Enabled {
 		t.Fatalf("Heartbeat.Enabled = %#v", source.Heartbeat.Enabled)
