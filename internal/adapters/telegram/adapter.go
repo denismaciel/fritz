@@ -47,6 +47,10 @@ type commandConfigurer interface {
 	SetMyCommands(context.Context, SetMyCommandsRequest) error
 }
 
+type webhookDeleter interface {
+	DeleteWebhook(context.Context, DeleteWebhookRequest) error
+}
+
 type Adapter struct {
 	paths       ingress.StatePaths
 	client      Client
@@ -304,6 +308,11 @@ func (a *Adapter) PollOnce(ctx context.Context) (int, error) {
 func (a *Adapter) Run(ctx context.Context) error {
 	logger := logx.Component("telegram")
 	logger.Info().Str("event", "telegram.run.start").Msg("")
+	if client, ok := a.client.(webhookDeleter); ok {
+		if err := client.DeleteWebhook(ctx, DeleteWebhookRequest{}); err != nil {
+			return fmt.Errorf("prepare Telegram polling: %w", err)
+		}
+	}
 	if err := a.ConfigureCommands(ctx); err != nil {
 		logger.Warn().Err(err).Str("event", "telegram.commands.configure.error").Msg("")
 	}

@@ -52,6 +52,10 @@ type SetMyCommandsRequest struct {
 	Commands []BotCommand `json:"commands"`
 }
 
+type DeleteWebhookRequest struct {
+	DropPendingUpdates bool `json:"drop_pending_updates"`
+}
+
 type Update struct {
 	UpdateID int64    `json:"update_id"`
 	Message  *Message `json:"message,omitempty"`
@@ -148,6 +152,11 @@ func (c *HTTPClient) SendMessage(ctx context.Context, req SendMessageRequest) er
 func (c *HTTPClient) SetMyCommands(ctx context.Context, req SetMyCommandsRequest) error {
 	var response apiResponse[json.RawMessage]
 	return c.post(ctx, "setMyCommands", req, &response)
+}
+
+func (c *HTTPClient) DeleteWebhook(ctx context.Context, req DeleteWebhookRequest) error {
+	var response apiResponse[json.RawMessage]
+	return c.post(ctx, "deleteWebhook", req, &response)
 }
 
 func (c *HTTPClient) GetFile(ctx context.Context, fileID string) (File, error) {

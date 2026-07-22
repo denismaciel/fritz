@@ -790,6 +790,12 @@ type fakeClient struct {
 	fileBodyByPath map[string][]byte
 	me             BotInfo
 	commands       []BotCommand
+	deletedWebhook bool
+}
+
+func (f *fakeClient) DeleteWebhook(context.Context, DeleteWebhookRequest) error {
+	f.deletedWebhook = true
+	return nil
 }
 
 func (f *fakeClient) GetMe(context.Context) (BotInfo, error) {

@@ -45,3 +45,25 @@ func TestHTTPClientSetsBotCommands(t *testing.T) {
 		t.Fatalf("commands = %#v", got.Commands)
 	}
 }
+
+func TestHTTPClientDeletesWebhookWithoutDroppingUpdates(t *testing.T) {
+	var got DeleteWebhookRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/bottoken/deleteWebhook" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("Decode() error = %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": true})
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient(server.Client(), server.URL, "token")
+	if err := client.DeleteWebhook(context.Background(), DeleteWebhookRequest{}); err != nil {
+		t.Fatalf("DeleteWebhook() error = %v", err)
+	}
+	if got.DropPendingUpdates {
+		t.Fatal("DeleteWebhook() dropped pending updates")
+	}
+}
